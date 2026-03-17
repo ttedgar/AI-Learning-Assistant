@@ -8,4 +8,16 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // When @vitejs/plugin-react's Babel transform is bypassed in the Vitest
+  // jsdom worker, esbuild handles JSX. Setting jsx:'automatic' ensures it
+  // uses React's automatic runtime (react/jsx-runtime) instead of the
+  // classic React.createElement form that requires React in scope.
+  esbuild: {
+    jsx: 'automatic',
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.js',
+  },
 })
