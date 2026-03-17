@@ -17,6 +17,12 @@ Prompt management: prompts are fetched from Langfuse at call time so they can be
   fallbacks if Langfuse is unreachable or unconfigured.
   Each trace is linked to the exact prompt version that produced it.
 
+Langfuse v3 API notes:
+  - CallbackHandler() takes NO constructor args; reads LANGFUSE_* env vars.
+  - Prompt-to-trace linking: set metadata={"langfuse_prompt": lf_prompt} on
+    the PromptTemplate itself (not on the handler).
+  - Trace metadata (name, tags) passed in chain.invoke(config={"metadata": {...}}).
+
 Production note: Responses would also be cached in Redis (keyed by SHA-256 of
 the input text + prompt version) to avoid duplicate Gemini calls for the same
 content. Cache TTL: 24 h.
@@ -24,7 +30,7 @@ content. Cache TTL: 24 h.
 
 import json
 import logging
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 from langchain.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -40,7 +46,7 @@ logger = logging.getLogger(__name__)
 _LLM_TEMPERATURE = 0.3  # single source of truth — also appears in Config metadata
 
 # ---------------------------------------------------------------------------
-# Langfuse client (singleton)
+# Langfuse client (singleton) — used only for prompt management
 # ---------------------------------------------------------------------------
 
 _langfuse_client: Optional[Langfuse] = None
@@ -49,8 +55,8 @@ _langfuse_client: Optional[Langfuse] = None
 def _get_langfuse_client() -> Optional[Langfuse]:
     """
     Returns a cached Langfuse client if credentials are configured, else None.
-    The client reads LANGFUSE_SECRET_KEY / LANGFUSE_PUBLIC_KEY / LANGFUSE_HOST
-    from the environment automatically.
+    Used for prompt management (fetching prompt versions from the dashboard).
+    Tracing credentials are read from LANGFUSE_* env vars by CallbackHandler directly.
     """
     global _langfuse_client
     settings = get_settings()
@@ -65,56 +71,48 @@ def _get_langfuse_client() -> Optional[Langfuse]:
     return _langfuse_client
 
 
-def _get_prompt(
-    name: str, fallback: PromptTemplate
-) -> Tuple[Any, Optional[Any]]:
+def _get_prompt(name: str, fallback: PromptTemplate) -> PromptTemplate:
     """
-    Fetch a prompt from Langfuse by name. Returns (langchain_template, lf_prompt_object).
+    Fetch a prompt from Langfuse by name and return a PromptTemplate.
 
-    The lf_prompt_object is passed to the CallbackHandler so Langfuse can link
-    each trace to the exact prompt version that was used — enabling prompt-level
-    analytics (which version performs best, regression detection, etc.).
+    In langfuse v3, get_langchain_prompt() returns a plain string (the template
+    text), not a Runnable. We wrap it as a PromptTemplate and embed the
+    lf_prompt object in its metadata so the CallbackHandler can link each trace
+    to the exact prompt version — enabling version-level analytics.
 
-    Falls back to the hardcoded template if Langfuse is unreachable or unconfigured,
-    returning None as the prompt object so tracing still works without the link.
+    Falls back to the hardcoded template if Langfuse is unreachable or unconfigured.
     """
     client = _get_langfuse_client()
     if client is None:
-        return fallback, None
+        return fallback
     try:
         lf_prompt = client.get_prompt(name)
-        return lf_prompt.get_langchain_prompt(), lf_prompt
+        template_str = lf_prompt.get_langchain_prompt()  # returns str in v3
+        return PromptTemplate(
+            input_variables=fallback.input_variables,
+            template=template_str,
+            metadata={"langfuse_prompt": lf_prompt},
+        )
     except Exception as exc:
         logger.warning(
             "Failed to fetch prompt from Langfuse, using hardcoded fallback",
             extra={"prompt_name": name, "error": str(exc)},
         )
-        return fallback, None
+        return fallback
 
 
-def _get_langfuse_handler(operation: str, langfuse_prompt: Optional[Any] = None) -> Optional[CallbackHandler]:
+def _get_langfuse_handler() -> Optional[CallbackHandler]:
     """
-    Returns a Langfuse LangChain callback handler scoped to one LLM call.
+    Returns a Langfuse LangChain callback handler.
 
-    Passing langfuse_prompt links the resulting trace to the specific prompt
-    version that was fetched, making it visible in Langfuse's prompt analytics.
-    The metadata dict populates the Config panel in the trace view.
+    In langfuse v3 the handler reads LANGFUSE_SECRET_KEY / LANGFUSE_PUBLIC_KEY /
+    LANGFUSE_HOST from the environment — no constructor args are accepted.
+    Trace name and metadata are set per-invocation via chain.invoke(config=...).
     """
     settings = get_settings()
     if not settings.langfuse_secret_key or not settings.langfuse_public_key:
         return None
-    return CallbackHandler(
-        secret_key=settings.langfuse_secret_key,
-        public_key=settings.langfuse_public_key,
-        host=settings.langfuse_host,
-        trace_name=operation,
-        langfuse_prompt=langfuse_prompt,
-        metadata={
-            "model": settings.gemini_model,
-            "temperature": _LLM_TEMPERATURE,
-            "operation": operation,
-        },
-    )
+    return CallbackHandler()
 
 
 # ---------------------------------------------------------------------------
@@ -199,13 +197,32 @@ def _invoke_llm(
     prompt_template: Any,
     text: str,
     operation: str,
-    langfuse_prompt: Optional[Any] = None,
 ) -> str:
-    """Format a prompt, call the LLM, and return the string output."""
+    """
+    Format a prompt, call the LLM, and return the string output.
+
+    Trace metadata (name, model, temperature) is passed via the config dict so
+    Langfuse v3 can populate the Config panel and name the trace correctly.
+    Prompt-to-trace linking is handled via metadata on the PromptTemplate itself
+    (set by _get_prompt when the template comes from Langfuse).
+    """
+    settings = get_settings()
     llm = _get_llm()
     chain = prompt_template | llm
-    callbacks = [h for h in [_get_langfuse_handler(operation, langfuse_prompt)] if h is not None]
-    result = chain.invoke({"text": text}, config={"callbacks": callbacks})
+    handler = _get_langfuse_handler()
+    callbacks = [handler] if handler is not None else []
+    result = chain.invoke(
+        {"text": text},
+        config={
+            "callbacks": callbacks,
+            "metadata": {
+                "langfuse_trace_name": operation,
+                "langfuse_tags": [operation],
+                "model": settings.gemini_model,
+                "temperature": _LLM_TEMPERATURE,
+            },
+        },
+    )
     # LangChain returns an AIMessage; extract the string content
     return result.content if hasattr(result, "content") else str(result)
 
@@ -221,8 +238,8 @@ def _map_reduce_summarize(text: str) -> str:
     Map:    summarize each chunk independently
     Reduce: combine chunk summaries into a single final summary
     """
-    chunk_template, chunk_lf_prompt = _get_prompt("summarize-chunk", _CHUNK_SUMMARY_PROMPT)
-    reduce_template, reduce_lf_prompt = _get_prompt("summarize-reduce", _REDUCE_PROMPT)
+    chunk_template = _get_prompt("summarize-chunk", _CHUNK_SUMMARY_PROMPT)
+    reduce_template = _get_prompt("summarize-reduce", _REDUCE_PROMPT)
 
     chunks = split_text(text)
     logger.info("Starting map-reduce summarization", extra={"chunks": len(chunks)})
@@ -231,12 +248,12 @@ def _map_reduce_summarize(text: str) -> str:
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
         logger.debug("Summarising chunk", extra={"chunk_index": i, "chunk_length": len(chunk)})
-        summary = _invoke_llm(chunk_template, chunk, operation="chunk_summary", langfuse_prompt=chunk_lf_prompt)
+        summary = _invoke_llm(chunk_template, chunk, operation="chunk_summary")
         chunk_summaries.append(summary)
 
     # Reduce step
     combined = "\n\n---\n\n".join(chunk_summaries)
-    final_summary = _invoke_llm(reduce_template, combined, operation="reduce", langfuse_prompt=reduce_lf_prompt)
+    final_summary = _invoke_llm(reduce_template, combined, operation="reduce")
     logger.info("Map-reduce summarization complete")
     return final_summary
 
@@ -253,8 +270,8 @@ def generate_summary(text: str) -> SummaryResponse:
         logger.info("Long document detected — using map-reduce path", extra={"length": len(text)})
         summary = _map_reduce_summarize(text)
     else:
-        prompt_template, lf_prompt = _get_prompt("summarize-document", _SUMMARY_PROMPT)
-        summary = _invoke_llm(prompt_template, text, operation="summarize", langfuse_prompt=lf_prompt)
+        prompt_template = _get_prompt("summarize-document", _SUMMARY_PROMPT)
+        summary = _invoke_llm(prompt_template, text, operation="summarize")
 
     return SummaryResponse(summary=summary.strip())
 
@@ -268,8 +285,8 @@ def generate_flashcards(text: str) -> FlashcardsResponse:
         chunks = split_text(text)
         text = chunks[0]  # noqa: PLW2901 — intentional narrowing for flashcard generation
 
-    prompt_template, lf_prompt = _get_prompt("generate-flashcards", _FLASHCARDS_PROMPT)
-    raw = _invoke_llm(prompt_template, text, operation="flashcards", langfuse_prompt=lf_prompt)
+    prompt_template = _get_prompt("generate-flashcards", _FLASHCARDS_PROMPT)
+    raw = _invoke_llm(prompt_template, text, operation="flashcards")
     cards_data = _parse_json_list(raw, context="flashcards")
     flashcards = [Flashcard(**card) for card in cards_data]
     return FlashcardsResponse(flashcards=flashcards)
@@ -281,8 +298,8 @@ def generate_quiz(text: str) -> QuizResponse:
         chunks = split_text(text)
         text = chunks[0]  # noqa: PLW2901 — same rationale as flashcards
 
-    prompt_template, lf_prompt = _get_prompt("generate-quiz", _QUIZ_PROMPT)
-    raw = _invoke_llm(prompt_template, text, operation="quiz", langfuse_prompt=lf_prompt)
+    prompt_template = _get_prompt("generate-quiz", _QUIZ_PROMPT)
+    raw = _invoke_llm(prompt_template, text, operation="quiz")
     questions_data = _parse_json_list(raw, context="quiz")
     questions = [QuizQuestion(**q) for q in questions_data]
     return QuizResponse(questions=questions)

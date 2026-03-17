@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Gemini
     google_api_key: str = ""
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-2.5-flash"
 
     # Long-document thresholds
     # Documents over this character count trigger map-reduce chunking.
