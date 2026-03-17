@@ -76,6 +76,10 @@ services:
       SUPABASE_JWT_SECRET:  ${SUPABASE_JWT_SECRET}
       # Internal API key used by worker → ai-service
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      # CORS — frontend origin; browser preflight would fail without this
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      # Temporary: debug JWT validation failures
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: DEBUG
       SPRING_PROFILES_ACTIVE: prod
     depends_on:
       rabbitmq:
@@ -126,13 +130,16 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # VITE_* vars must be build-time ARGs, not runtime environment vars.
+      # Vite bakes import.meta.env.VITE_* into the JS bundle at `npm run build`;
+      # runtime environment variables are not visible to the browser bundle.
+      args:
+        VITE_BACKEND_URL: http://localhost:8080
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     container_name: frontend
     ports:
       - "5173:80"  # Nginx serves the Vite build on port 80
-    environment:
-      VITE_BACKEND_URL:      http://localhost:8080
-      VITE_SUPABASE_URL:     ${SUPABASE_URL}
-      VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     depends_on:
       - backend
     restart: unless-stopped
