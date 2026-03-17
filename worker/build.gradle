@@ -27,17 +27,40 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-amqp'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+	// WebClient for PDF download and ai-service HTTP calls (WebFlux client, not server)
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	// PDF text extraction
+	implementation 'org.apache.pdfbox:pdfbox:3.0.3'
 	// JSON structured logs — same pattern as backend, feeds into log aggregators
 	implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
+	// Jackson for JSON message serialisation/deserialisation
+	implementation 'com.fasterxml.jackson.core:jackson-databind'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:junit-jupiter'
 	testImplementation 'org.testcontainers:rabbitmq'
+	// MockWebServer — lightweight HTTP mock for testing WebClient calls
+	testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		// Integration tests (Testcontainers) are excluded from the default test task.
+		// They require a native Docker socket and are run in CI (GitHub Actions / Linux).
+		// To run locally: ./gradlew integrationTest
+		// Or in Docker: docker compose run --rm worker ./gradlew test
+		excludeTags 'integration'
+	}
+}
+
+// Separate task that includes integration tests.
+// Requires Docker socket accessible at /var/run/docker.sock or DOCKER_HOST.
+tasks.register('integrationTest', Test) {
+	useJUnitPlatform {
+		includeTags 'integration'
+	}
+	shouldRunAfter 'test'
 }
