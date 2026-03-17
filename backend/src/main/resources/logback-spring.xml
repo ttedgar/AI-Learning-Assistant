@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  JSON structured logging via Logstash encoder.
+  All log lines include:
+    - timestamp (ISO-8601 UTC)
+    - level
+    - service  (spring.application.name)
+    - correlationId  (from MDC, propagated through request lifecycle)
+    - logger
+    - message
+    - stack_trace (on exceptions)
+
+  Production note: ship these JSON lines to a log aggregator (Datadog, ELK, GCP Logging).
+  The correlationId allows tracing a single request across backend → worker → ai-service.
+  A production system would use OpenTelemetry + Jaeger for distributed tracing.
+-->
+<configuration>
+
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="backend"/>
+
+    <!-- ── Production appender: JSON to stdout ────────────────────────────── -->
+    <appender name="JSON_STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <providers>
+                <timestamp>
+                    <timeZone>UTC</timeZone>
+                </timestamp>
+                <logLevel/>
+                <loggerName/>
+                <message/>
+                <mdc/>           <!-- includes correlationId from MDC -->
+                <stackTrace/>
+                <arguments/>
+            </providers>
+            <customFields>{"service":"${appName}"}</customFields>
+        </encoder>
+    </appender>
+
+    <!-- ── Development appender: human-readable to stdout ────────────────── -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId:-no-correlation-id}] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ── Profile-specific routing ───────────────────────────────────────── -->
+    <springProfile name="prod,railway">
+        <root level="INFO">
+            <appender-ref ref="JSON_STDOUT"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!prod &amp; !railway">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <!-- Reduce noise from framework internals in dev -->
+        <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="org.springframework.security" level="DEBUG"/>
+    </springProfile>
+
+</configuration>

@@ -1,0 +1,90 @@
+spring:
+  application:
+    name: backend
+
+  # ── Database ─────────────────────────────────────────────────────────────────
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    # Hibernate validates against Liquibase-managed schema; it never auto-creates DDL.
+    # Production note: set to 'validate' in all environments. Use 'none' if you want
+    # Liquibase-only control with zero Hibernate DDL involvement.
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: public
+        jdbc:
+          time_zone: UTC
+    open-in-view: false  # Avoid lazy-loading issues; all data access must be in @Transactional
+
+  # ── Database Migrations ───────────────────────────────────────────────────────
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    enabled: true
+
+  # ── Messaging ────────────────────────────────────────────────────────────────
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+  # ── Cache / Rate Limiting ─────────────────────────────────────────────────────
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+
+# ── Supabase ──────────────────────────────────────────────────────────────────
+# Production note: SUPABASE_JWT_SECRET must be at least 256 bits for HS256.
+# A zero-trust deployment would use JWKS (RS256) via Supabase's public JWKS URL.
+supabase:
+  jwt-secret: ${SUPABASE_JWT_SECRET}
+  url: ${SUPABASE_URL}
+  storage-bucket: ${SUPABASE_STORAGE_BUCKET:documents}
+
+# ── Server ────────────────────────────────────────────────────────────────────
+server:
+  port: ${PORT:8080}
+  error:
+    # Disable Spring Boot's default /error redirect; all errors go through GlobalExceptionHandler.
+    whitelabel:
+      enabled: false
+
+# ── Actuator ─────────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# ── API Docs ──────────────────────────────────────────────────────────────────
+# Production note: set springdoc.swagger-ui.enabled=false and springdoc.api-docs.enabled=false
+# in the Railway production environment profile.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  config: classpath:logback-spring.xml
