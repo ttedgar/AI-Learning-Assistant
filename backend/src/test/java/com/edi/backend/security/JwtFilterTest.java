@@ -6,7 +6,8 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.web.servlet.client.RestTestClient;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.client.MockMvcWebTestClient;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +17,7 @@ import java.util.UUID;
 /**
  * Unit tests for {@link JwtAuthenticationFilter}.
  *
- * <p>Uses Spring Framework 7's {@link RestTestClient} in standalone mode — no Spring application
+ * <p>Uses {@link MockMvcWebTestClient} in standalone mode — no Spring application
  * context, no database, no Testcontainers. The filter is instantiated directly and attached to
  * a standalone MockMvc build that includes only the {@link HealthController}.
  *
@@ -38,7 +39,7 @@ class JwtFilterTest {
     private static final String JWT_SECRET =
             "test-secret-used-only-in-unit-and-integration-tests-32bytes!";
 
-    private RestTestClient restTestClient;
+    private WebTestClient restTestClient;
     private SecretKey signingKey;
 
     @BeforeEach
@@ -48,9 +49,9 @@ class JwtFilterTest {
         SupabaseJwtValidator validator = new SupabaseJwtValidator(JWT_SECRET);
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(validator);
 
-        restTestClient = RestTestClient
+        restTestClient = MockMvcWebTestClient
                 .bindToController(new HealthController())
-                .configureServer(builder -> builder.addFilters(jwtFilter))
+                .filters(jwtFilter)
                 .build();
     }
 

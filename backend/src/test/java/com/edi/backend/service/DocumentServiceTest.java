@@ -45,13 +45,13 @@ class DocumentServiceTest {
     private DocumentService documentService;
 
     private User testUser;
-    private final String supabaseUserId = "supabase-user-123";
+    private final String supabaseUserId = "00000000-0000-0000-0000-000000000003";
 
     @BeforeEach
     void setUp() {
-        testUser = new User(supabaseUserId, "user@example.com");
+        testUser = new User(UUID.fromString(supabaseUserId), "user@example.com");
         // lenient: some tests throw before the user repository is reached (e.g. rate limit exceeded)
-        lenient().when(userRepository.findBySupabaseUserId(supabaseUserId))
+        lenient().when(userRepository.findBySupabaseUserId(UUID.fromString(supabaseUserId)))
                 .thenReturn(Optional.of(testUser));
     }
 

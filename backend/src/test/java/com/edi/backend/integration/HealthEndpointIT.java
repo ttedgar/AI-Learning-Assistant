@@ -8,7 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.client.RestTestClient;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.client.MockMvcWebTestClient;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
@@ -25,7 +26,7 @@ import org.springframework.web.context.WebApplicationContext;
  * PostgreSQL (with Liquibase migrations applied), RabbitMQ, Redis.
  *
  * <p>Uses {@code MOCK} web environment so the test doesn't start a real HTTP server —
- * {@link RestTestClient} wraps MockMvc and exercises the full Spring Security filter chain
+ * {@link MockMvcWebTestClient} wraps MockMvc and exercises the full Spring Security filter chain
  * without the networking overhead of {@code RANDOM_PORT}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
@@ -36,13 +37,13 @@ class HealthEndpointIT {
     @Autowired
     private WebApplicationContext webApplicationContext;
 
-    private RestTestClient restTestClient;
+    private WebTestClient restTestClient;
 
     @BeforeEach
     void setUp() {
         // bindToApplicationContext applies Spring Security's full filter chain including
         // JwtAuthenticationFilter, CorrelationIdFilter, and the configured SecurityFilterChain.
-        restTestClient = RestTestClient
+        restTestClient = MockMvcWebTestClient
                 .bindToApplicationContext(webApplicationContext)
                 .build();
     }

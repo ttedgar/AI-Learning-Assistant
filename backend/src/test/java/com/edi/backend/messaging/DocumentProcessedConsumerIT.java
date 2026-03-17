@@ -53,7 +53,7 @@ class DocumentProcessedConsumerIT {
         documentRepository.deleteAll();
         userRepository.deleteAll();
 
-        User user = userRepository.save(new User("consumer-test-user", "consumer@test.com"));
+        User user = userRepository.save(new User(UUID.fromString("00000000-0000-0000-0000-000000000002"), "consumer@test.com"));
         testDocument = documentRepository.save(
                 new Document(user, "Test Document", "https://storage/test.pdf"));
     }

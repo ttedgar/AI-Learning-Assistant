@@ -55,7 +55,7 @@ class DocumentControllerIT {
     @MockitoBean private StorageService storageService;
     @MockitoBean private DocumentProcessingProducer producer;
 
-    private static final String SUPABASE_USER_ID = "integration-test-user";
+    private static final String SUPABASE_USER_ID = "00000000-0000-0000-0000-000000000001";
     private static final String STORAGE_URL = "https://supabase.co/storage/documents/user/test.pdf";
 
     private User testUser;
@@ -64,7 +64,7 @@ class DocumentControllerIT {
     void setUp() {
         documentRepository.deleteAll();
         userRepository.deleteAll();
-        testUser = userRepository.save(new User(SUPABASE_USER_ID, "integration@test.com"));
+        testUser = userRepository.save(new User(UUID.fromString(SUPABASE_USER_ID), "integration@test.com"));
         authenticateAs(SUPABASE_USER_ID);
     }
 

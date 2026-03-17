@@ -6,7 +6,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.client.RestTestClient;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.test.web.servlet.client.MockMvcWebTestClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Unit tests for {@link GlobalExceptionHandler}.
  *
- * <p>Uses Spring Framework 7's {@link RestTestClient} in standalone mode — no Spring application
+ * <p>Uses {@link MockMvcWebTestClient} in standalone mode — no Spring application
  * context, no database, no Testcontainers. A minimal inline test controller deliberately triggers
  * each exception type so we can verify the RFC 7807 response shape.
  *
@@ -29,13 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
  */
 class GlobalExceptionHandlerTest {
 
-    private RestTestClient restTestClient;
+    private WebTestClient restTestClient;
 
     @BeforeEach
     void setUp() {
-        restTestClient = RestTestClient
+        restTestClient = MockMvcWebTestClient
                 .bindToController(new TestController())
-                .configureServer(builder -> builder.setControllerAdvice(new GlobalExceptionHandler()))
+                .controllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
 
@@ -78,7 +79,7 @@ class GlobalExceptionHandlerTest {
     void validationFailure_produces400WithFieldErrors() {
         restTestClient.post().uri("/test/validate")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body("""
+                .bodyValue("""
                         {"name": ""}
                         """)
                 .exchange()
