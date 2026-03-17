@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import LandingPage from './pages/LandingPage'
 import DashboardPage from './pages/DashboardPage'
 import UploadPage from './pages/UploadPage'
+import DocumentPage from './pages/DocumentPage'
 
 /**
  * Single QueryClient instance for the whole app.
@@ -76,6 +77,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <UploadPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/documents/:id"
+            element={
+              <ProtectedRoute>
+                <DocumentPage />
               </ProtectedRoute>
             }
           />
