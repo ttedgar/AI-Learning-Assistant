@@ -11,11 +11,11 @@ LangChain is used for:
   - LLM abstraction (ChatGoogleGenerativeAI)
   - Text splitting and map-reduce for long documents (see chunking.py)
 
-Observability: Langfuse traces every LLM call automatically via the LangChain
-CallbackHandler. Each chain.invoke() produces a trace with prompt, response,
-token usage, latency, and cost visible in the Langfuse dashboard.
-Production note: Langfuse also supports prompt management (versioned prompts
-pulled from the dashboard) and A/B evaluation — next steps for this service.
+Observability: Langfuse traces every LLM call via the LangChain CallbackHandler.
+Prompt management: prompts are fetched from Langfuse at call time so they can be
+  edited in the dashboard without redeployment. Hardcoded templates act as
+  fallbacks if Langfuse is unreachable or unconfigured.
+  Each trace is linked to the exact prompt version that produced it.
 
 Production note: Responses would also be cached in Redis (keyed by SHA-256 of
 the input text + prompt version) to avoid duplicate Gemini calls for the same
@@ -24,10 +24,11 @@ content. Cache TTL: 24 h.
 
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional, Tuple
 
 from langchain.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langfuse import Langfuse
 from langfuse.langchain import CallbackHandler
 
 from app.config import get_settings
@@ -36,21 +37,68 @@ from app.services.chunking import should_chunk, split_text
 
 logger = logging.getLogger(__name__)
 
-
 _LLM_TEMPERATURE = 0.3  # single source of truth — also appears in Config metadata
 
+# ---------------------------------------------------------------------------
+# Langfuse client (singleton)
+# ---------------------------------------------------------------------------
 
-def _get_langfuse_handler(operation: str) -> Optional[CallbackHandler]:
+_langfuse_client: Optional[Langfuse] = None
+
+
+def _get_langfuse_client() -> Optional[Langfuse]:
     """
-    Returns a Langfuse LangChain callback handler if credentials are configured,
-    otherwise returns None (Langfuse is optional — the service runs without it).
+    Returns a cached Langfuse client if credentials are configured, else None.
+    The client reads LANGFUSE_SECRET_KEY / LANGFUSE_PUBLIC_KEY / LANGFUSE_HOST
+    from the environment automatically.
+    """
+    global _langfuse_client
+    settings = get_settings()
+    if not settings.langfuse_secret_key or not settings.langfuse_public_key:
+        return None
+    if _langfuse_client is None:
+        _langfuse_client = Langfuse(
+            secret_key=settings.langfuse_secret_key,
+            public_key=settings.langfuse_public_key,
+            host=settings.langfuse_host,
+        )
+    return _langfuse_client
 
-    The handler is constructed per-request so each trace is independently scoped
-    with its own operation name and metadata. In a high-throughput production
-    system you would reuse a single handler; for this scale, per-call is fine.
 
-    The `metadata` dict populates the Config panel in the Langfuse trace view,
-    making it easy to filter traces by operation type or model version.
+def _get_prompt(
+    name: str, fallback: PromptTemplate
+) -> Tuple[Any, Optional[Any]]:
+    """
+    Fetch a prompt from Langfuse by name. Returns (langchain_template, lf_prompt_object).
+
+    The lf_prompt_object is passed to the CallbackHandler so Langfuse can link
+    each trace to the exact prompt version that was used — enabling prompt-level
+    analytics (which version performs best, regression detection, etc.).
+
+    Falls back to the hardcoded template if Langfuse is unreachable or unconfigured,
+    returning None as the prompt object so tracing still works without the link.
+    """
+    client = _get_langfuse_client()
+    if client is None:
+        return fallback, None
+    try:
+        lf_prompt = client.get_prompt(name)
+        return lf_prompt.get_langchain_prompt(), lf_prompt
+    except Exception as exc:
+        logger.warning(
+            "Failed to fetch prompt from Langfuse, using hardcoded fallback",
+            extra={"prompt_name": name, "error": str(exc)},
+        )
+        return fallback, None
+
+
+def _get_langfuse_handler(operation: str, langfuse_prompt: Optional[Any] = None) -> Optional[CallbackHandler]:
+    """
+    Returns a Langfuse LangChain callback handler scoped to one LLM call.
+
+    Passing langfuse_prompt links the resulting trace to the specific prompt
+    version that was fetched, making it visible in Langfuse's prompt analytics.
+    The metadata dict populates the Config panel in the trace view.
     """
     settings = get_settings()
     if not settings.langfuse_secret_key or not settings.langfuse_public_key:
@@ -60,6 +108,7 @@ def _get_langfuse_handler(operation: str) -> Optional[CallbackHandler]:
         public_key=settings.langfuse_public_key,
         host=settings.langfuse_host,
         trace_name=operation,
+        langfuse_prompt=langfuse_prompt,
         metadata={
             "model": settings.gemini_model,
             "temperature": _LLM_TEMPERATURE,
@@ -67,8 +116,9 @@ def _get_langfuse_handler(operation: str) -> Optional[CallbackHandler]:
         },
     )
 
+
 # ---------------------------------------------------------------------------
-# Prompt templates
+# Hardcoded prompt fallbacks
 # ---------------------------------------------------------------------------
 
 _SUMMARY_PROMPT = PromptTemplate(
@@ -131,6 +181,10 @@ _QUIZ_PROMPT = PromptTemplate(
 )
 
 
+# ---------------------------------------------------------------------------
+# LLM helpers
+# ---------------------------------------------------------------------------
+
 def _get_llm() -> ChatGoogleGenerativeAI:
     """Construct the LangChain LLM wrapper for Gemini."""
     settings = get_settings()
@@ -141,11 +195,16 @@ def _get_llm() -> ChatGoogleGenerativeAI:
     )
 
 
-def _invoke_llm(prompt: PromptTemplate, text: str, operation: str) -> str:
+def _invoke_llm(
+    prompt_template: Any,
+    text: str,
+    operation: str,
+    langfuse_prompt: Optional[Any] = None,
+) -> str:
     """Format a prompt, call the LLM, and return the string output."""
     llm = _get_llm()
-    chain = prompt | llm
-    callbacks = [h for h in [_get_langfuse_handler(operation)] if h is not None]
+    chain = prompt_template | llm
+    callbacks = [h for h in [_get_langfuse_handler(operation, langfuse_prompt)] if h is not None]
     result = chain.invoke({"text": text}, config={"callbacks": callbacks})
     # LangChain returns an AIMessage; extract the string content
     return result.content if hasattr(result, "content") else str(result)
@@ -162,6 +221,9 @@ def _map_reduce_summarize(text: str) -> str:
     Map:    summarize each chunk independently
     Reduce: combine chunk summaries into a single final summary
     """
+    chunk_template, chunk_lf_prompt = _get_prompt("summarize-chunk", _CHUNK_SUMMARY_PROMPT)
+    reduce_template, reduce_lf_prompt = _get_prompt("summarize-reduce", _REDUCE_PROMPT)
+
     chunks = split_text(text)
     logger.info("Starting map-reduce summarization", extra={"chunks": len(chunks)})
 
@@ -169,12 +231,12 @@ def _map_reduce_summarize(text: str) -> str:
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
         logger.debug("Summarising chunk", extra={"chunk_index": i, "chunk_length": len(chunk)})
-        summary = _invoke_llm(_CHUNK_SUMMARY_PROMPT, chunk, operation="chunk_summary")
+        summary = _invoke_llm(chunk_template, chunk, operation="chunk_summary", langfuse_prompt=chunk_lf_prompt)
         chunk_summaries.append(summary)
 
     # Reduce step
     combined = "\n\n---\n\n".join(chunk_summaries)
-    final_summary = _invoke_llm(_REDUCE_PROMPT, combined, operation="reduce")
+    final_summary = _invoke_llm(reduce_template, combined, operation="reduce", langfuse_prompt=reduce_lf_prompt)
     logger.info("Map-reduce summarization complete")
     return final_summary
 
@@ -191,7 +253,8 @@ def generate_summary(text: str) -> SummaryResponse:
         logger.info("Long document detected — using map-reduce path", extra={"length": len(text)})
         summary = _map_reduce_summarize(text)
     else:
-        summary = _invoke_llm(_SUMMARY_PROMPT, text, operation="summarize")
+        prompt_template, lf_prompt = _get_prompt("summarize-document", _SUMMARY_PROMPT)
+        summary = _invoke_llm(prompt_template, text, operation="summarize", langfuse_prompt=lf_prompt)
 
     return SummaryResponse(summary=summary.strip())
 
@@ -205,7 +268,8 @@ def generate_flashcards(text: str) -> FlashcardsResponse:
         chunks = split_text(text)
         text = chunks[0]  # noqa: PLW2901 — intentional narrowing for flashcard generation
 
-    raw = _invoke_llm(_FLASHCARDS_PROMPT, text, operation="flashcards")
+    prompt_template, lf_prompt = _get_prompt("generate-flashcards", _FLASHCARDS_PROMPT)
+    raw = _invoke_llm(prompt_template, text, operation="flashcards", langfuse_prompt=lf_prompt)
     cards_data = _parse_json_list(raw, context="flashcards")
     flashcards = [Flashcard(**card) for card in cards_data]
     return FlashcardsResponse(flashcards=flashcards)
@@ -217,7 +281,8 @@ def generate_quiz(text: str) -> QuizResponse:
         chunks = split_text(text)
         text = chunks[0]  # noqa: PLW2901 — same rationale as flashcards
 
-    raw = _invoke_llm(_QUIZ_PROMPT, text, operation="quiz")
+    prompt_template, lf_prompt = _get_prompt("generate-quiz", _QUIZ_PROMPT)
+    raw = _invoke_llm(prompt_template, text, operation="quiz", langfuse_prompt=lf_prompt)
     questions_data = _parse_json_list(raw, context="quiz")
     questions = [QuizQuestion(**q) for q in questions_data]
     return QuizResponse(questions=questions)
