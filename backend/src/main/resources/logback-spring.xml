@@ -21,17 +21,9 @@
     <!-- ── Production appender: JSON to stdout ────────────────────────────── -->
     <appender name="JSON_STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <providers>
-                <timestamp>
-                    <timeZone>UTC</timeZone>
-                </timestamp>
-                <logLevel/>
-                <loggerName/>
-                <message/>
-                <mdc/>           <!-- includes correlationId from MDC -->
-                <stackTrace/>
-                <arguments/>
-            </providers>
+            <!-- logstash-logback-encoder 8.0: <providers> block removed; all standard
+                 providers (timestamp, level, logger, message, mdc, stackTrace, arguments)
+                 are included by default. Use <provider> (singular) to add extras only. -->
             <customFields>{"service":"${appName}"}</customFields>
         </encoder>
     </appender>
