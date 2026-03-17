@@ -1,11 +1,9 @@
 package com.edi.backend.config;
 
-import com.edi.backend.security.JwtAuthenticationFilter;
-import com.edi.backend.security.SupabaseJwtValidator;
+import com.edi.backend.security.SupabaseJwtFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -14,71 +12,47 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Spring Security configuration for the backend API.
+ * Spring Security configuration for a stateless REST API.
  *
- * <p>Key decisions:
+ * <h3>Design decisions</h3>
  * <ul>
- *   <li><strong>Stateless sessions:</strong> No HttpSession is created. Every request must carry
- *       a valid Supabase JWT. This is the only safe approach for horizontally-scalable REST APIs.</li>
- *   <li><strong>CSRF disabled:</strong> CSRF protection is not needed for stateless APIs that use
- *       token-based auth (no cookies). Enabling it would break the API for all non-browser clients.</li>
- *   <li><strong>Custom AuthenticationEntryPoint:</strong> Returns RFC 7807 JSON on 401 rather than
- *       the Spring Security default HTML redirect, which would be useless for API consumers.</li>
+ *   <li>CSRF disabled — the API is stateless (JWT, no cookies), so CSRF is not applicable.</li>
+ *   <li>Session management STATELESS — every request must carry its own JWT; no server-side sessions.</li>
+ *   <li>{@code /api/v1/health} is public — required for Railway / Docker health checks before auth is available.</li>
+ *   <li>Swagger UI is public — allows API exploration without credentials; restrict in production if needed.</li>
+ *   <li>All other endpoints require a valid JWT.</li>
  * </ul>
+ *
+ * <p>Production note: add CORS configuration here (allow only the Railway frontend URL),
+ * and consider rate-limiting the Swagger UI path to prevent enumeration attacks.
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    /** Public endpoints that do not require a JWT. */
-    private static final String[] PUBLIC_MATCHERS = {
-            "/api/v1/health",
-            "/v3/api-docs/**",
-            "/swagger-ui.html",
-            "/swagger-ui/**",
-            "/actuator/health"
-    };
+    private final SupabaseJwtFilter supabaseJwtFilter;
 
-    @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter(SupabaseJwtValidator jwtValidator) {
-        return new JwtAuthenticationFilter(jwtValidator);
+    public SecurityConfig(SupabaseJwtFilter supabaseJwtFilter) {
+        this.supabaseJwtFilter = supabaseJwtFilter;
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
-        http
-                // Stateless REST API — no sessions.
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-                // CSRF not needed for stateless token auth.
-                .csrf(AbstractHttpConfigurer::disable)
-
-                // CORS is configured per-controller via @CrossOrigin or a global CorsConfigurationSource bean.
-                // The features worktree will add the production CORS config (Railway frontend URL only).
-                .cors(AbstractHttpConfigurer::disable)
-
-                // Request authorisation rules.
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PUBLIC_MATCHERS).permitAll()
-                        .anyRequest().authenticated()
-                )
-
-                // Custom 401 response: RFC 7807 JSON, not a redirect.
-                .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                            response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-                            response.getWriter().write("""
-                                    {"type":"about:blank","title":"Unauthorized","status":401,"detail":"%s"}
-                                    """.formatted(authException.getMessage()));
-                        })
-                )
-
-                // JWT filter runs before Spring's UsernamePasswordAuthenticationFilter.
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
-        return http.build();
+                        // Liveness probe — must be accessible before auth is wired up
+                        .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
+                        // Actuator health for Railway readiness probes
+                        .requestMatchers("/actuator/health").permitAll()
+                        // Swagger UI — publicly accessible for API exploration
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
+                                         "/v3/api-docs/**").permitAll()
+                        // All other endpoints require a valid Supabase JWT
+                        .anyRequest().authenticated())
+                .addFilterBefore(supabaseJwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .build();
     }
 }

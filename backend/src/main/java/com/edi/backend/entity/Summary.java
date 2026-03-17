@@ -10,8 +10,13 @@ import java.util.UUID;
 /**
  * AI-generated summary for a document.
  *
- * <p>One-to-one with {@link Document}. Created by the backend when it consumes a successful
- * {@code document.processed} message from the worker. Content may be Markdown-formatted.
+ * <p>One-to-one with {@link Document} (enforced by UNIQUE constraint on {@code document_id}).
+ * Created by the backend when it consumes a successful {@code document.processed} message
+ * from the worker. Content may be Markdown-formatted — the frontend renders it with a
+ * markdown renderer.
+ *
+ * <p>For long documents the ai-service uses LangChain map-reduce summarization,
+ * chunking the text before generating the final summary.
  */
 @Entity
 @Table(name = "summaries")
@@ -25,12 +30,17 @@ public class Summary {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "document_id", nullable = false, unique = true)
     private Document document;
 
-    @Column(nullable = false, columnDefinition = "text")
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
+
+    public Summary(Document document, String content) {
+        this.document = document;
+        this.content = content;
+    }
 
     @Override
     public boolean equals(Object o) {

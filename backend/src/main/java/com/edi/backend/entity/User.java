@@ -18,6 +18,12 @@ import java.util.UUID;
  *
  * <p>{@code supabaseUserId} is the {@code sub} claim from the JWT — the stable identifier that
  * ties our local record to the Supabase identity.
+ *
+ * <p>Created / updated via {@code POST /api/v1/auth/sync} after the frontend completes
+ * the OAuth flow (the backend cannot receive the Supabase auth callback directly).
+ *
+ * <p>Production: {@code created_at} would be accompanied by {@code updated_at} and a soft-delete
+ * flag, enabling GDPR-compliant account deletion auditing.
  */
 @Entity
 @Table(
@@ -39,12 +45,17 @@ public class User {
     @Column(name = "supabase_user_id", unique = true, nullable = false, columnDefinition = "uuid")
     private UUID supabaseUserId;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     private String email;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private Instant createdAt;
+
+    public User(UUID supabaseUserId, String email) {
+        this.supabaseUserId = supabaseUserId;
+        this.email = email;
+    }
 
     /**
      * Equality based on {@code id} only — avoids triggering lazy proxy loading.

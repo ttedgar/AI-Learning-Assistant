@@ -48,12 +48,25 @@ spring:
       port: ${SPRING_DATA_REDIS_PORT:6379}
       timeout: 2000ms
 
+  servlet:
+    multipart:
+      # 20 MB max file size; enforced at the servlet layer before reaching the controller.
+      # GlobalExceptionHandler maps MaxUploadSizeExceededException → 413 Payload Too Large.
+      max-file-size: 20MB
+      max-request-size: 22MB
+
+  jackson:
+    # Serialize Instant/LocalDate as ISO-8601 strings, not epoch timestamps.
+    # Frontend expects "2024-01-15T10:00:00Z" not 1705312800000.
+    serialization:
+      write-dates-as-timestamps: false
+
 # ── Supabase ──────────────────────────────────────────────────────────────────
 # Production note: SUPABASE_JWT_SECRET must be at least 256 bits for HS256.
 # A zero-trust deployment would use JWKS (RS256) via Supabase's public JWKS URL.
 supabase:
-  jwt-secret: ${SUPABASE_JWT_SECRET}
-  url: ${SUPABASE_URL}
+  jwt-secret: ${SUPABASE_JWT_SECRET:}
+  url: ${SUPABASE_URL:}
   storage-bucket: ${SUPABASE_STORAGE_BUCKET:documents}
 
 # ── Server ────────────────────────────────────────────────────────────────────

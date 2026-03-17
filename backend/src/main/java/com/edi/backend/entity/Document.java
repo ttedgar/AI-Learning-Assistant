@@ -18,6 +18,9 @@ import java.util.UUID;
  *
  * <p>{@code fileUrl} points to the Supabase Storage object. On delete, the backend must remove
  * the file from storage before or after removing the DB row — handled in the service layer.
+ *
+ * <p>Production: add optimistic locking ({@code @Version}) to guard against concurrent status
+ * updates if multiple consumer instances process the same document simultaneously.
  */
 @Entity
 @Table(
@@ -37,7 +40,7 @@ public class Document {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -54,6 +57,12 @@ public class Document {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private Instant createdAt;
+
+    public Document(User user, String title, String fileUrl) {
+        this.user = user;
+        this.title = title;
+        this.fileUrl = fileUrl;
+    }
 
     @Override
     public boolean equals(Object o) {

@@ -43,8 +43,17 @@ dependencies {
 	// ── Messaging ──
 	implementation 'org.springframework.boot:spring-boot-starter-amqp'
 
-	// ── Cache / Rate Limiting (features worktree) ──
+	// ── Cache / Rate Limiting ──
+	// Redis — backing store for Bucket4j rate limiter
+	// Production: Redis Cluster with TLS; locally Redis runs in Docker
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+	// Bucket4j — Redis-backed distributed rate limiting.
+	// Uses Lua scripts via Lettuce for atomic token-bucket operations.
+	// Production: works correctly under horizontal scaling as state lives in Redis, not in-process.
+	implementation 'com.bucket4j:bucket4j_jdk17-core:8.14.0'
+	implementation 'com.bucket4j:bucket4j_jdk17-redis-common:8.14.0'
+	implementation 'com.bucket4j:bucket4j_jdk17-lettuce:8.14.0'
 
 	// ── Actuator ──
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -75,6 +84,8 @@ dependencies {
 	testImplementation 'org.testcontainers:junit-jupiter'
 	testImplementation 'org.testcontainers:postgresql'
 	testImplementation 'org.testcontainers:rabbitmq'
+	// Redis container for rate-limiter integration tests
+	testImplementation 'com.redis:testcontainers-redis:2.2.2'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
