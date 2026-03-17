@@ -37,14 +37,20 @@ from app.services.chunking import should_chunk, split_text
 logger = logging.getLogger(__name__)
 
 
-def _get_langfuse_handler() -> Optional[CallbackHandler]:
+_LLM_TEMPERATURE = 0.3  # single source of truth — also appears in Config metadata
+
+
+def _get_langfuse_handler(operation: str) -> Optional[CallbackHandler]:
     """
     Returns a Langfuse LangChain callback handler if credentials are configured,
     otherwise returns None (Langfuse is optional — the service runs without it).
 
-    The handler is constructed per-request rather than cached so that each trace
-    is independently scoped. In a high-throughput production system you would
-    reuse a single handler instance; for this scale, per-call construction is fine.
+    The handler is constructed per-request so each trace is independently scoped
+    with its own operation name and metadata. In a high-throughput production
+    system you would reuse a single handler; for this scale, per-call is fine.
+
+    The `metadata` dict populates the Config panel in the Langfuse trace view,
+    making it easy to filter traces by operation type or model version.
     """
     settings = get_settings()
     if not settings.langfuse_secret_key or not settings.langfuse_public_key:
@@ -53,6 +59,12 @@ def _get_langfuse_handler() -> Optional[CallbackHandler]:
         secret_key=settings.langfuse_secret_key,
         public_key=settings.langfuse_public_key,
         host=settings.langfuse_host,
+        trace_name=operation,
+        metadata={
+            "model": settings.gemini_model,
+            "temperature": _LLM_TEMPERATURE,
+            "operation": operation,
+        },
     )
 
 # ---------------------------------------------------------------------------
@@ -125,15 +137,15 @@ def _get_llm() -> ChatGoogleGenerativeAI:
     return ChatGoogleGenerativeAI(
         model=settings.gemini_model,
         google_api_key=settings.google_api_key,
-        temperature=0.3,
+        temperature=_LLM_TEMPERATURE,
     )
 
 
-def _invoke_llm(prompt: PromptTemplate, text: str) -> str:
+def _invoke_llm(prompt: PromptTemplate, text: str, operation: str) -> str:
     """Format a prompt, call the LLM, and return the string output."""
     llm = _get_llm()
     chain = prompt | llm
-    callbacks = [h for h in [_get_langfuse_handler()] if h is not None]
+    callbacks = [h for h in [_get_langfuse_handler(operation)] if h is not None]
     result = chain.invoke({"text": text}, config={"callbacks": callbacks})
     # LangChain returns an AIMessage; extract the string content
     return result.content if hasattr(result, "content") else str(result)
@@ -157,12 +169,12 @@ def _map_reduce_summarize(text: str) -> str:
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
         logger.debug("Summarising chunk", extra={"chunk_index": i, "chunk_length": len(chunk)})
-        summary = _invoke_llm(_CHUNK_SUMMARY_PROMPT, chunk)
+        summary = _invoke_llm(_CHUNK_SUMMARY_PROMPT, chunk, operation="chunk_summary")
         chunk_summaries.append(summary)
 
     # Reduce step
     combined = "\n\n---\n\n".join(chunk_summaries)
-    final_summary = _invoke_llm(_REDUCE_PROMPT, combined)
+    final_summary = _invoke_llm(_REDUCE_PROMPT, combined, operation="reduce")
     logger.info("Map-reduce summarization complete")
     return final_summary
 
@@ -179,7 +191,7 @@ def generate_summary(text: str) -> SummaryResponse:
         logger.info("Long document detected — using map-reduce path", extra={"length": len(text)})
         summary = _map_reduce_summarize(text)
     else:
-        summary = _invoke_llm(_SUMMARY_PROMPT, text)
+        summary = _invoke_llm(_SUMMARY_PROMPT, text, operation="summarize")
 
     return SummaryResponse(summary=summary.strip())
 
@@ -193,7 +205,7 @@ def generate_flashcards(text: str) -> FlashcardsResponse:
         chunks = split_text(text)
         text = chunks[0]  # noqa: PLW2901 — intentional narrowing for flashcard generation
 
-    raw = _invoke_llm(_FLASHCARDS_PROMPT, text)
+    raw = _invoke_llm(_FLASHCARDS_PROMPT, text, operation="flashcards")
     cards_data = _parse_json_list(raw, context="flashcards")
     flashcards = [Flashcard(**card) for card in cards_data]
     return FlashcardsResponse(flashcards=flashcards)
@@ -205,7 +217,7 @@ def generate_quiz(text: str) -> QuizResponse:
         chunks = split_text(text)
         text = chunks[0]  # noqa: PLW2901 — same rationale as flashcards
 
-    raw = _invoke_llm(_QUIZ_PROMPT, text)
+    raw = _invoke_llm(_QUIZ_PROMPT, text, operation="quiz")
     questions_data = _parse_json_list(raw, context="quiz")
     questions = [QuizQuestion(**q) for q in questions_data]
     return QuizResponse(questions=questions)
