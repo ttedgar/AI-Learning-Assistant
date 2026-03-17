@@ -48,7 +48,10 @@ export default function App() {
         // Upsert the Supabase user into the backend's local users table so
         // the backend can use a stable internal UUID for foreign keys.
         try {
-          await api.post('/api/v1/auth/sync')
+          await api.post('/api/v1/auth/sync', {
+            supabaseUserId: session.user.id,
+            email: session.user.email,
+          })
         } catch (err) {
           // Non-fatal: user can still use the app; sync retries on next sign-in.
           console.error('[auth] Failed to sync user with backend:', err)
