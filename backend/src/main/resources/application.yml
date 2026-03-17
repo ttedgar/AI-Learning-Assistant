@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: backend
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/learning_assistant}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # Liquibase owns all schema changes — DDL-auto must stay 'none'
+      # Production: same setting; schema migrations are audited via Liquibase changesets
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+
+  # Redis config present for rate limiting (Bucket4j, added in backend-api-features worktree)
+  # Production: Redis Cluster with TLS; locally Redis runs in Docker
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+server:
+  port: ${PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Supabase connectivity — used by StorageClient and JwtFilter
+supabase:
+  url: ${SUPABASE_URL:https://your-project.supabase.co}
+  service-key: ${SUPABASE_SERVICE_KEY:your-service-role-key}
+  jwt-secret: ${SUPABASE_JWT_SECRET:your-jwt-secret}
+
+# Internal service-to-service API key
+# Production: replace with mTLS client certificate verification
+internal:
+  api-key: ${INTERNAL_API_KEY:change-me-in-prod}

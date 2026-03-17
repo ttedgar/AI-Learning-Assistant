@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Structured JSON logging via Logstash Logback encoder.
+    Each log line is a single JSON object — ready for ingestion by Datadog, ELK, or Splunk.
+
+    Production: enable the JSON appender; disable the console appender to avoid double-logging.
+    The correlationId MDC field is populated per-request/per-message and propagated through
+    the full call chain (manually here; production would use OpenTelemetry + Jaeger).
+-->
+<configuration>
+
+    <springProfile name="!prod">
+        <!-- Human-readable logs for local development -->
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} [correlationId=%X{correlationId:-none}] - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <!-- JSON structured logs for production log aggregators -->
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <includeMdcKeyName>correlationId</includeMdcKeyName>
+                <includeMdcKeyName>userId</includeMdcKeyName>
+                <includeMdcKeyName>documentId</includeMdcKeyName>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+        </root>
+    </springProfile>
+
+</configuration>

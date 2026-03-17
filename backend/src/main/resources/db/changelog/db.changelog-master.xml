@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <!--
+        Liquibase master changelog — all changesets are included in order.
+        Never modify an existing changeset after it has run in any environment.
+        Only add new changesets.
+        Production: this file is applied automatically on backend startup via Spring Boot integration.
+    -->
+    <include file="db/changelog/001-initial-schema.sql"/>
+
+</databaseChangeLog>

@@ -6,7 +6,7 @@ plugins {
 
 group = 'com.edi'
 version = '0.0.1-SNAPSHOT'
-description = 'backend'
+description = 'worker'
 
 java {
 	toolchain {
@@ -25,22 +25,15 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-amqp'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.liquibase:liquibase-core'
-	// JSON structured logs — Logback + Logstash encoder
-	// Production: feeds directly into ELK/Splunk/Datadog log aggregators
+	// JSON structured logs — same pattern as backend, feeds into log aggregators
 	implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
 	compileOnly 'org.projectlombok:lombok'
-	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:junit-jupiter'
-	testImplementation 'org.testcontainers:postgresql'
 	testImplementation 'org.testcontainers:rabbitmq'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

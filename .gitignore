@@ -10,3 +10,10 @@ Thumbs.db
 
 # Claude worktrees
 .claude/worktrees/
+
+# Environment files — never commit secrets
+.env
+backend/.env
+worker/.env
+ai-service/.env
+frontend/.env

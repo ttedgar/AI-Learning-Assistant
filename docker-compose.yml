@@ -1,0 +1,139 @@
+# Local development environment.
+#
+# Services: RabbitMQ, Redis, backend, worker, ai-service, frontend.
+# Database is Supabase (hosted) — not run locally.
+# Configure all Supabase vars in the root .env file before starting.
+#
+# Usage:
+#   cp .env.example .env   # fill in Supabase values
+#   docker-compose up -d --build
+#   docker-compose ps      # all should be "running"
+#
+# RabbitMQ management UI: http://localhost:15672  (guest / guest)
+# Backend Swagger UI:     http://localhost:8080/swagger-ui.html
+# AI service health:      http://localhost:8000/health
+
+version: "3.9"
+
+services:
+
+  # ── Message broker ────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Cache / Rate-limit store ───────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Backend (Spring Boot REST API) ────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "8080:8080"
+    environment:
+      # Supabase PostgreSQL — set in .env
+      SPRING_DATASOURCE_URL:      ${SUPABASE_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${SUPABASE_DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      # Broker
+      SPRING_RABBITMQ_HOST:     rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-guest}
+      # Cache
+      SPRING_DATA_REDIS_HOST: redis
+      # Supabase Auth / Storage
+      SUPABASE_URL:         ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      SUPABASE_JWT_SECRET:  ${SUPABASE_JWT_SECRET}
+      # Internal API key used by worker → ai-service
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Worker (Spring Boot RabbitMQ consumer) ────────────────────────────────
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: worker
+    environment:
+      SPRING_RABBITMQ_HOST:     rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-guest}
+      AI_SERVICE_URL:   http://ai-service:8000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── AI Service (FastAPI + LangChain + Gemini) ─────────────────────────────
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      GEMINI_API_KEY:   ${GEMINI_API_KEY}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      ENVIRONMENT:      prod
+    restart: unless-stopped
+
+  # ── Frontend (React + Vite, served by Nginx) ──────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "5173:80"  # Nginx serves the Vite build on port 80
+    environment:
+      VITE_BACKEND_URL:      http://localhost:8080
+      VITE_SUPABASE_URL:     ${SUPABASE_URL}
+      VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  rabbitmq-data:
+  redis-data:

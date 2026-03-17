@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: worker
+
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+
+server:
+  port: ${PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+# ai-service connection
+ai-service:
+  url: ${AI_SERVICE_URL:http://localhost:8000}
+
+# Internal API key sent to ai-service via X-Internal-Api-Key header
+# Production: replace with mTLS client certificates
+internal:
+  api-key: ${INTERNAL_API_KEY:change-me-in-prod}
