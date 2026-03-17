@@ -2,7 +2,7 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 COPY . .
 # Build-time env vars (VITE_ prefix) are baked into the JS bundle at build time.
 # Pass them via --build-arg or docker-compose build.args.
