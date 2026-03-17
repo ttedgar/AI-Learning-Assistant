@@ -5,7 +5,7 @@
 --          so we are never coupled to Supabase's internal key structure.
 CREATE TABLE IF NOT EXISTS users (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    supabase_user_id TEXT        NOT NULL UNIQUE,
+    supabase_user_id UUID        NOT NULL UNIQUE,
     email            TEXT        NOT NULL UNIQUE,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -11,6 +11,15 @@
 -- combine with API-layer ownership checks (already done in DocumentService).
 -- ============================================================
 
+-- Drop existing policies to allow idempotent re-runs
+DROP POLICY IF EXISTS "users: read own row"                      ON users;
+DROP POLICY IF EXISTS "users: update own row"                    ON users;
+DROP POLICY IF EXISTS "documents: read own"                      ON documents;
+DROP POLICY IF EXISTS "documents: delete own"                    ON documents;
+DROP POLICY IF EXISTS "summaries: read via document ownership"   ON summaries;
+DROP POLICY IF EXISTS "flashcards: read via document ownership"  ON flashcards;
+DROP POLICY IF EXISTS "quiz_questions: read via document ownership" ON quiz_questions;
+
 -- Enable RLS on all tables (disabled by default in Supabase)
 ALTER TABLE users         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents     ENABLE ROW LEVEL SECURITY;
@@ -21,14 +30,17 @@ ALTER TABLE quiz_questions ENABLE ROW LEVEL SECURITY;
 -- ── users ────────────────────────────────────────────────────
 -- Each user can only read/update their own profile row.
 -- Inserts are performed by the backend (service role) on first login.
+-- Note: (SELECT auth.uid()) is the recommended Supabase pattern — wrapping in
+-- SELECT prevents per-row re-evaluation and produces a stable execution plan.
+-- supabase_user_id is UUID, same type as auth.uid() — no cast needed.
 
 CREATE POLICY "users: read own row"
     ON users FOR SELECT
-    USING (supabase_user_id = auth.uid()::text);
+    USING (supabase_user_id = (SELECT auth.uid()));
 
 CREATE POLICY "users: update own row"
     ON users FOR UPDATE
-    USING (supabase_user_id = auth.uid()::text);
+    USING (supabase_user_id = (SELECT auth.uid()));
 
 -- ── documents ────────────────────────────────────────────────
 -- Users can only see and delete their own documents.
@@ -38,7 +50,7 @@ CREATE POLICY "documents: read own"
     ON documents FOR SELECT
     USING (
         user_id = (
-            SELECT id FROM users WHERE supabase_user_id = auth.uid()::text
+            SELECT id FROM users WHERE supabase_user_id = (SELECT auth.uid())
         )
     );
 
@@ -46,7 +58,7 @@ CREATE POLICY "documents: delete own"
     ON documents FOR DELETE
     USING (
         user_id = (
-            SELECT id FROM users WHERE supabase_user_id = auth.uid()::text
+            SELECT id FROM users WHERE supabase_user_id = (SELECT auth.uid())
         )
     );
 
@@ -59,7 +71,7 @@ CREATE POLICY "summaries: read via document ownership"
         document_id IN (
             SELECT d.id FROM documents d
             JOIN users u ON u.id = d.user_id
-            WHERE u.supabase_user_id = auth.uid()::text
+            WHERE u.supabase_user_id = (SELECT auth.uid())
         )
     );
 
@@ -71,7 +83,7 @@ CREATE POLICY "flashcards: read via document ownership"
         document_id IN (
             SELECT d.id FROM documents d
             JOIN users u ON u.id = d.user_id
-            WHERE u.supabase_user_id = auth.uid()::text
+            WHERE u.supabase_user_id = (SELECT auth.uid())
         )
     );
 
@@ -83,6 +95,6 @@ CREATE POLICY "quiz_questions: read via document ownership"
         document_id IN (
             SELECT d.id FROM documents d
             JOIN users u ON u.id = d.user_id
-            WHERE u.supabase_user_id = auth.uid()::text
+            WHERE u.supabase_user_id = (SELECT auth.uid())
         )
     );
