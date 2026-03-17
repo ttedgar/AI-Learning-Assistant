@@ -58,12 +58,13 @@ dependencies {
 	// ── Actuator ──
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
-	// ── JWT — Supabase token validation (HS256) ──
-	// Production note: Supabase signs tokens with a shared secret.
-	// A zero-trust production system would use Supabase's JWKS endpoint + RS256.
-	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+	// ── JWT — Supabase token validation via JWKS (ES256 / RS256) ──
+	// Spring's OAuth2 Resource Server fetches Supabase's public JWKS at startup,
+	// caches the key set, and handles key rotation automatically.
+	// JWKS URI: ${SUPABASE_URL}/auth/v1/.well-known/jwks.json
+	// Production note: this is zero-trust — the backend only holds the public key,
+	// never the signing secret. Prefer this over HS256 in all multi-service deployments.
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
 	// ── Structured Logging (JSON, Logstash-compatible) ──
 	// Production: feeds directly into ELK/Splunk/Datadog log aggregators
