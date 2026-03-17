@@ -113,9 +113,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      GOOGLE_API_KEY:   ${GEMINI_API_KEY}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-      ENVIRONMENT:      prod
+      GOOGLE_API_KEY:      ${GEMINI_API_KEY}
+      INTERNAL_API_KEY:    ${INTERNAL_API_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_HOST:       ${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      ENVIRONMENT:         prod
     restart: unless-stopped
 
   # ── Frontend (React + Vite, served by Nginx) ──────────────────────────────

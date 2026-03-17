@@ -11,6 +11,12 @@ LangChain is used for:
   - LLM abstraction (ChatGoogleGenerativeAI)
   - Text splitting and map-reduce for long documents (see chunking.py)
 
+Observability: Langfuse traces every LLM call automatically via the LangChain
+CallbackHandler. Each chain.invoke() produces a trace with prompt, response,
+token usage, latency, and cost visible in the Langfuse dashboard.
+Production note: Langfuse also supports prompt management (versioned prompts
+pulled from the dashboard) and A/B evaluation — next steps for this service.
+
 Production note: Responses would also be cached in Redis (keyed by SHA-256 of
 the input text + prompt version) to avoid duplicate Gemini calls for the same
 content. Cache TTL: 24 h.
@@ -18,15 +24,36 @@ content. Cache TTL: 24 h.
 
 import json
 import logging
+from typing import Optional
 
 from langchain.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langfuse.langchain import CallbackHandler
 
 from app.config import get_settings
 from app.models.responses import Flashcard, FlashcardsResponse, QuizQuestion, QuizResponse, SummaryResponse
 from app.services.chunking import should_chunk, split_text
 
 logger = logging.getLogger(__name__)
+
+
+def _get_langfuse_handler() -> Optional[CallbackHandler]:
+    """
+    Returns a Langfuse LangChain callback handler if credentials are configured,
+    otherwise returns None (Langfuse is optional — the service runs without it).
+
+    The handler is constructed per-request rather than cached so that each trace
+    is independently scoped. In a high-throughput production system you would
+    reuse a single handler instance; for this scale, per-call construction is fine.
+    """
+    settings = get_settings()
+    if not settings.langfuse_secret_key or not settings.langfuse_public_key:
+        return None
+    return CallbackHandler(
+        secret_key=settings.langfuse_secret_key,
+        public_key=settings.langfuse_public_key,
+        host=settings.langfuse_host,
+    )
 
 # ---------------------------------------------------------------------------
 # Prompt templates
@@ -106,7 +133,8 @@ def _invoke_llm(prompt: PromptTemplate, text: str) -> str:
     """Format a prompt, call the LLM, and return the string output."""
     llm = _get_llm()
     chain = prompt | llm
-    result = chain.invoke({"text": text})
+    callbacks = [h for h in [_get_langfuse_handler()] if h is not None]
+    result = chain.invoke({"text": text}, config={"callbacks": callbacks})
     # LangChain returns an AIMessage; extract the string content
     return result.content if hasattr(result, "content") else str(result)
 

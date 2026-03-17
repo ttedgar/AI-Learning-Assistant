@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     chunk_size: int = 4_000
     chunk_overlap: int = 200
 
+    # Langfuse observability (optional — service starts without it)
+    # Production: always set these; traces give cost, latency, and error visibility.
+    langfuse_secret_key: str = ""
+    langfuse_public_key: str = ""
+    langfuse_host: str = "https://cloud.langfuse.com"
+
     # Logging
     log_level: str = "INFO"
 
