@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Initial schema — all five domain tables.
+
+  Design choices:
+  - UUID primary keys with gen_random_uuid() default (PostgreSQL 13+, no extension needed).
+    Production alternative: use ULIDs for sortable UUIDs.
+  - TIMESTAMPTZ (timezone-aware) for all timestamps, stored in UTC.
+  - VARCHAR for enum columns — validated at application layer via JPA @Enumerated.
+    Production alternative: PostgreSQL native ENUM types for stricter DB-level constraints.
+  - JSONB for quiz_questions.options — efficient, indexable JSON storage.
+  - ON DELETE CASCADE: deleting a document removes all related summaries, flashcards, quiz questions.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.26.xsd">
+
+    <changeSet id="001-create-users" author="backend-api-core">
+        <createTable tableName="users">
+            <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="supabase_user_id" type="varchar(255)">
+                <constraints unique="true" nullable="false"/>
+            </column>
+            <column name="email" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="users" indexName="idx_users_supabase_user_id">
+            <column name="supabase_user_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-create-documents" author="backend-api-core">
+        <createTable tableName="documents">
+            <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_documents_user_id"
+                             references="users(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="title" type="varchar(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="file_url" type="varchar(2048)">
+                <constraints nullable="false"/>
+            </column>
+            <!--
+              Status lifecycle: PENDING → PROCESSING → DONE | FAILED
+              Validated at application layer. Production alternative: PostgreSQL CHECK constraint.
+            -->
+            <column name="status" type="varchar(20)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="documents" indexName="idx_documents_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        <createIndex tableName="documents" indexName="idx_documents_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-create-summaries" author="backend-api-core">
+        <createTable tableName="summaries">
+            <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="document_id" type="uuid">
+                <constraints nullable="false" unique="true"
+                             foreignKeyName="fk_summaries_document_id"
+                             references="documents(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="content" type="text">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="001-create-flashcards" author="backend-api-core">
+        <createTable tableName="flashcards">
+            <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="document_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_flashcards_document_id"
+                             references="documents(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="question" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="answer" type="text">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="flashcards" indexName="idx_flashcards_document_id">
+            <column name="document_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="001-create-quiz-questions" author="backend-api-core">
+        <createTable tableName="quiz_questions">
+            <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="document_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_quiz_questions_document_id"
+                             references="documents(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="question" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <!-- type: MULTIPLE_CHOICE | OPEN_ENDED -->
+            <column name="type" type="varchar(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="correct_answer" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <!--
+              options: JSON array of strings, only populated for MULTIPLE_CHOICE.
+              JSONB allows GIN indexing if we ever need to query by option text.
+            -->
+            <column name="options" type="jsonb"/>
+        </createTable>
+
+        <createIndex tableName="quiz_questions" indexName="idx_quiz_questions_document_id">
+            <column name="document_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,20 @@
+# Test profile — overrides for integration and unit tests.
+# Testcontainers' @ServiceConnection auto-configures datasource, RabbitMQ, and Redis
+# from the running containers, so those are not set here.
+supabase:
+  jwt-secret: "test-secret-used-only-in-unit-and-integration-tests-32bytes!"
+  url: "https://test.supabase.co"
+  storage-bucket: "test-documents"
+
+spring:
+  jpa:
+    # Allow Hibernate to create the schema in tests where Liquibase also runs.
+    # Liquibase runs first (higher precedence), then Hibernate validates.
+    hibernate:
+      ddl-auto: validate
+
+logging:
+  level:
+    root: WARN
+    com.edi.backend: DEBUG
+    org.springframework.security: DEBUG

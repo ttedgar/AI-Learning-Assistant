@@ -9,7 +9,11 @@
       "Grep(*)"
     ],
     "deny": [
-      "Bash(git push*)"
+      "Bash(git push*)",
+      "Bash(docker stop*)",
+      "Bash(docker rm*)",
+      "Bash(docker kill*)",
+      "Bash(docker rmi*)"
     ]
   }
 }

@@ -2,57 +2,89 @@ spring:
   application:
     name: backend
 
+  # ── Database ─────────────────────────────────────────────────────────────────
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/learning_assistant}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
-    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
 
   jpa:
+    # Hibernate validates against Liquibase-managed schema; it never auto-creates DDL.
+    # Production note: 'validate' is the correct production setting — Liquibase owns schema,
+    # Hibernate verifies its JPA mappings match. Use 'none' only if Hibernate validation is noisy.
     hibernate:
-      # Liquibase owns all schema changes — DDL-auto must stay 'none'
-      # Production: same setting; schema migrations are audited via Liquibase changesets
-      ddl-auto: none
-    open-in-view: false
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: public
+        jdbc:
+          time_zone: UTC
+    open-in-view: false  # Avoid lazy-loading issues; all data access must be in @Transactional
 
+  # ── Database Migrations ───────────────────────────────────────────────────────
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
+    enabled: true
 
+  # ── Messaging ────────────────────────────────────────────────────────────────
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}
     username: ${SPRING_RABBITMQ_USERNAME:guest}
     password: ${SPRING_RABBITMQ_PASSWORD:guest}
 
-  # Redis config present for rate limiting (Bucket4j, added in backend-api-features worktree)
+  # ── Cache / Rate Limiting ─────────────────────────────────────────────────────
   # Production: Redis Cluster with TLS; locally Redis runs in Docker
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 2000ms
 
+# ── Supabase ──────────────────────────────────────────────────────────────────
+# Production note: SUPABASE_JWT_SECRET must be at least 256 bits for HS256.
+# A zero-trust deployment would use JWKS (RS256) via Supabase's public JWKS URL.
+supabase:
+  jwt-secret: ${SUPABASE_JWT_SECRET}
+  url: ${SUPABASE_URL}
+  storage-bucket: ${SUPABASE_STORAGE_BUCKET:documents}
+
+# ── Server ────────────────────────────────────────────────────────────────────
 server:
   port: ${PORT:8080}
+  error:
+    # Disable Spring Boot's default /error redirect; all errors go through GlobalExceptionHandler.
+    whitelabel:
+      enabled: false
 
+# ── Actuator ─────────────────────────────────────────────────────────────────
 management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics
+        include: health,info,metrics
   endpoint:
     health:
       show-details: when-authorized
 
-# Supabase connectivity — used by StorageClient and JwtFilter
-supabase:
-  url: ${SUPABASE_URL:https://your-project.supabase.co}
-  service-key: ${SUPABASE_SERVICE_KEY:your-service-role-key}
-  jwt-secret: ${SUPABASE_JWT_SECRET:your-jwt-secret}
+# ── API Docs ──────────────────────────────────────────────────────────────────
+# Production note: set springdoc.swagger-ui.enabled=false and springdoc.api-docs.enabled=false
+# in the Railway production environment profile.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
 
-# Internal service-to-service API key
-# Production: replace with mTLS client certificate verification
-internal:
-  api-key: ${INTERNAL_API_KEY:change-me-in-prod}
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  config: classpath:logback-spring.xml

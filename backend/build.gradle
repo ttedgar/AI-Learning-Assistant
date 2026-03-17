@@ -25,10 +25,19 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-actuator'
-	implementation 'org.springframework.boot:spring-boot-starter-amqp'
+	// ── Web (servlet stack; webflux added for WebClient used in features worktree) ──
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	// WebClient for Supabase Storage calls (features worktree). Having both web +
+	// webflux on the classpath is supported — Boot keeps Tomcat as the server.
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+	// ── Security ──
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
+	// ── Data ──
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
+<<<<<<< HEAD
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.liquibase:liquibase-core'
 	// JSON structured logs — Logback + Logstash encoder
@@ -36,13 +45,55 @@ dependencies {
 	implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
 	compileOnly 'org.projectlombok:lombok'
+=======
+	implementation 'org.liquibase:liquibase-core'
+>>>>>>> worktree-backend-api-core
 	runtimeOnly 'org.postgresql:postgresql'
+
+	// ── Messaging ──
+	implementation 'org.springframework.boot:spring-boot-starter-amqp'
+
+	// ── Cache / Rate Limiting (features worktree) ──
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+	// ── Actuator ──
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+	// ── JWT — Supabase token validation (HS256) ──
+	// Production note: Supabase signs tokens with a shared secret.
+	// A zero-trust production system would use Supabase's JWKS endpoint + RS256.
+	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+	// ── Structured Logging (JSON, Logstash-compatible) ──
+	implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+	// ── API Docs ──
+	// Production: disable Swagger UI in prod profile via springdoc.swagger-ui.enabled=false
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.3'
+
+	// ── Lombok ──
+	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
+<<<<<<< HEAD
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:junit-jupiter'
 	testImplementation 'org.testcontainers:postgresql'
 	testImplementation 'org.testcontainers:rabbitmq'
+=======
+
+	// ── Testing ──
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.security:spring-security-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	// Testcontainers 2.x (Spring Boot 4 BOM) uses the testcontainers- prefix
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+	testImplementation 'org.testcontainers:testcontainers-postgresql'
+	testImplementation 'org.testcontainers:testcontainers-rabbitmq'
+	// Redis: GenericContainer with @ServiceConnection(name="redis")
+>>>>>>> worktree-backend-api-core
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
