@@ -181,14 +181,14 @@ Round 1 — COMPLETE ✓
 ├── backend-api-core       ✓ merged to main
 └── ai-service             ✓ merged to main
 
-Round 2 — IN PROGRESS
-├── backend-api-features   (needs: backend-api-core)
-├── worker                 (needs: backend-api-core + ai-service)
-└── frontend-core          (needs: setup-infrastructure)
+Round 2 — COMPLETE ✓
+├── backend-api-features   ✓ merged to main
+├── worker                 ✓ merged to main
+└── frontend-core          ✓ merged to main
 
-Round 3 — depends on Round 2, run in parallel:
+Round 3 — IN PROGRESS
 ├── frontend-results       (needs: frontend-core + backend-api-features)
-└── deployment             (needs: all)
+└── deployment             (needs: all — done manually, not via agent)
 ```
 
 ---
@@ -248,7 +248,7 @@ Spring Boot foundation — project structure, JPA entities, DB migrations, Sprin
 
 ---
 
-## Worktree 3: `backend-api-features`
+## Worktree 3: `backend-api-features` ✓ COMPLETE
 **Round 2 — depends on: `backend-api-core`**
 
 ### Goal
@@ -320,7 +320,7 @@ docker run --rm --network ai-learning-assistant_default curlimages/curl:latest \
 
 ---
 
-## Worktree 4: `worker`
+## Worktree 4: `worker` ✓ COMPLETE
 **Round 2 — depends on: `backend-api-core`, `ai-service`**
 
 ### Goal
@@ -447,7 +447,7 @@ POST /ai/quiz
 
 ---
 
-## Worktree 6: `frontend-core`
+## Worktree 6: `frontend-core` ✓ COMPLETE
 **Round 2 — depends on: `setup-infrastructure`**
 
 ### Goal
@@ -513,9 +513,8 @@ Document detail page — PDF viewer, summary, flashcards, quiz. Clean SaaS UI.
 - [ ] Summary tab — rendered markdown
 - [ ] Flashcards tab — flip animation, prev/next, progress counter (e.g. 3/12)
 - [ ] Quiz tab:
-  - Multiple choice — 4 options, color-coded correct/incorrect reveal
-  - Open ended — text input, reveal correct answer
-  - Score summary screen
+  - Multiple choice only — 4 options, color-coded correct/incorrect reveal
+  - Score summary screen at the end
 - [ ] Original tab — embedded PDF viewer or download button
 - [ ] Skeleton loaders for all tabs
 - [ ] Back to dashboard button
@@ -523,9 +522,15 @@ Document detail page — PDF viewer, summary, flashcards, quiz. Clean SaaS UI.
 
 **Tests (must be green before worktree is considered done):**
 - [ ] Unit: `FlashcardViewer.test.tsx` — flip works, next/prev navigation works
-- [ ] Unit: `QuizMultipleChoice.test.tsx` — selecting answer reveals correct/incorrect
-- [ ] Unit: `QuizOpenEnded.test.tsx` — submit reveals correct answer
+- [ ] Unit: `QuizMultipleChoice.test.tsx` — selecting answer reveals correct/incorrect, score tracked
 - [ ] Unit: `ScoreSummary.test.tsx` — correct score calculated and displayed
+
+### Docker
+```bash
+docker compose up -d --build frontend
+docker compose logs -f frontend
+# Open in Windows browser: http://localhost:5173
+```
 
 ---
 
