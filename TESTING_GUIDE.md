@@ -46,19 +46,24 @@ All services should show status `running`.
 
 ---
 
-### Round 1
+### Round 1 ✓ COMPLETE — already merged to main
 
 **Worktrees:** `setup-infrastructure`, `backend-api-core`, `ai-service`
 
-These worktrees lay the foundation. No business logic yet — you're verifying the skeleton works.
+All three are merged. Services are running. Skip to Round 2.
 
-#### Step 1 — Merge and build
-```bash
-git checkout main
-git merge worktree-setup-infrastructure
-git merge worktree-backend-api-core
-git merge worktree-ai-service
-```
+For reference, what was verified:
+- `docker-compose up -d` starts all services
+- Backend Swagger UI: `http://localhost:8080/swagger-ui.html` ✓
+- AI service health: call from within Docker network (see networking note below) ✓
+- Supabase tables created by Liquibase ✓
+
+> **WSL2 networking note:** Docker ports are exposed on the Windows host, not on WSL localhost.
+> From WSL you cannot `curl http://localhost:8080` directly. Two options:
+> - Use Windows PowerShell: `curl http://localhost:8080/api/v1/health`
+> - Call from within the Docker network: `docker run --rm --network ai-learning-assistant_default curlimages/curl:latest http://backend:8080/api/v1/health`
+
+---
 
 #### Step 2 — Run automated tests
 ```bash
@@ -245,7 +250,16 @@ Restart ai-service after:
 docker-compose start ai-service
 ```
 
-#### Step 12 — Test frontend core
+#### Step 12 — Verify Langfuse traces
+
+After a successful upload + processing flow, open your Langfuse dashboard:
+- You should see traces for `summarize`, `flashcards`, `quiz` operations
+- Each trace shows the Gemini model (`gemini-2.5-flash`), temperature, and operation name
+- Traces linked to prompt versions (if Langfuse prompts are configured)
+
+This is optional but confirms the full observability pipeline is working end-to-end.
+
+#### Step 13 — Test frontend core
 
 Open `http://localhost:5173`:
 - [ ] Landing page loads
@@ -295,7 +309,7 @@ Open `http://localhost:5173` and go through the complete user flow:
 - [ ] Click document → opens detail page
 - [ ] Summary tab — readable summary appears
 - [ ] Flashcards tab — cards flip on click, prev/next works, counter updates
-- [ ] Quiz tab — answer questions, correct/incorrect revealed, score shown at end
+- [ ] Quiz tab — answer multiple choice questions, correct/incorrect revealed, score shown at end
 - [ ] Original tab — PDF viewable or downloadable
 - [ ] Delete a document — disappears from dashboard
 - [ ] Logout — redirects to landing page

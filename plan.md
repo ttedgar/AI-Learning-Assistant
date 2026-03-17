@@ -91,9 +91,9 @@ quiz_questions
 ├── id (uuid)
 ├── document_id
 ├── question
-├── type                ← MULTIPLE_CHOICE / OPEN_ENDED
+├── type                ← MULTIPLE_CHOICE only (open-ended dropped — can't auto-grade wording variants)
 ├── correct_answer
-└── options             ← JSON array (multiple choice only)
+└── options             ← JSON array, always 4 options
 ```
 
 ---
@@ -147,12 +147,12 @@ claude --worktree ai-service
 ### Execution rounds (dependency order)
 
 ```
-Round 1 — no dependencies, run all in parallel:
-├── setup-infrastructure
-├── backend-api-core
-└── ai-service
+Round 1 — COMPLETE ✓
+├── setup-infrastructure   ✓ merged to main
+├── backend-api-core       ✓ merged to main
+└── ai-service             ✓ merged to main
 
-Round 2 — depends on Round 1, run in parallel:
+Round 2 — IN PROGRESS
 ├── backend-api-features   (needs: backend-api-core)
 ├── worker                 (needs: backend-api-core + ai-service)
 └── frontend-core          (needs: setup-infrastructure)
@@ -164,7 +164,7 @@ Round 3 — depends on Round 2, run in parallel:
 
 ---
 
-## Worktree 1: `setup-infrastructure`
+## Worktree 1: `setup-infrastructure` ✓ COMPLETE
 **Round 1 — no dependencies**
 
 ### Goal
@@ -186,7 +186,7 @@ Docker Compose for local development. Environment config. Railway deployment set
 
 ---
 
-## Worktree 2: `backend-api-core`
+## Worktree 2: `backend-api-core` ✓ COMPLETE
 **Round 1 — no dependencies**
 
 ### Goal
@@ -276,7 +276,7 @@ GET    /api/v1/documents/{id}/quiz        ← get quiz questions
   "errorMessage": "null or reason",
   "summary": "...",
   "flashcards": [{ "question": "...", "answer": "..." }],
-  "quiz": [{ "question": "...", "type": "MULTIPLE_CHOICE|OPEN_ENDED", "correctAnswer": "...", "options": [...] }]
+  "quiz": [{ "question": "...", "type": "MULTIPLE_CHOICE", "correctAnswer": "...", "options": ["...", "...", "...", "..."] }]
 }
 ```
 
@@ -324,9 +324,7 @@ download PDF (WebClient → Supabase Storage URL)
     ↓
 extract text (PDFBox)
     ↓
-[if text > threshold → chunk + map-reduce summarization]
-    ↓
-POST /ai/summarize   (X-Internal-Api-Key header)
+POST /ai/summarize   (X-Internal-Api-Key header)  ← ai-service handles chunking internally
 POST /ai/flashcards  (X-Internal-Api-Key header)
 POST /ai/quiz        (X-Internal-Api-Key header)
     ↓
@@ -336,11 +334,15 @@ ON ANY FAILURE (after 3 retries):
     ↓
 publish to document.processed: { status: FAILED, errorMessage }
 message routed to document.processing.dlq
+
+NOTE: Worker sends full extracted text to ai-service. Chunking and map-reduce
+summarization for long documents is handled entirely within ai-service — worker
+does not need to split text or manage chunks.
 ```
 
 ---
 
-## Worktree 5: `ai-service`
+## Worktree 5: `ai-service` ✓ COMPLETE
 **Round 1 — no dependencies**
 
 ### Goal
@@ -349,7 +351,10 @@ Python FastAPI microservice — sole responsibility: communicate with Gemini. Im
 ### Stack
 - Python 3.12
 - FastAPI
-- LangChain (prompt management, chunking, map-reduce)
+- LangChain 0.3.x (prompt management, chunking, map-reduce)
+- langchain-google-genai 2.1.x — Gemini via LangChain
+- Gemini model: `gemini-2.5-flash`
+- Langfuse 3.x — LLM observability (traces, prompt version tracking)
 - Pydantic (strict response models)
 
 ### Endpoints
@@ -369,19 +374,22 @@ POST /ai/flashcards
 POST /ai/quiz
     headers: X-Internal-Api-Key
     body:    { "text": "..." }
-    returns: { "questions": [{ "question": "...", "type": "MULTIPLE_CHOICE|OPEN_ENDED", "correct_answer": "...", "options": [...] }] }
+    returns: { "questions": [{ "question": "...", "type": "MULTIPLE_CHOICE", "correct_answer": "...", "options": ["...", "...", "...", "..."] }] }
 ```
 
 ### Tasks
-- [ ] FastAPI project in `/ai-service`
-- [ ] Internal API key middleware — reject requests without valid `X-Internal-Api-Key`
-- [ ] LangChain + Gemini integration
-- [ ] Prompt templates for summary, flashcards, quiz
-- [ ] Long document handling — chunk text, map-reduce summarization via LangChain
-- [ ] Pydantic response models — strict validation
-- [ ] Structured JSON logging
-- [ ] `GET /health`
-- [ ] Dockerfile
+- [x] FastAPI project in `/ai-service`
+- [x] Internal API key middleware — reject requests without valid `X-Internal-Api-Key`
+- [x] LangChain + Gemini integration (`gemini-2.5-flash`)
+- [x] Prompt templates for summary, flashcards, quiz (hardcoded fallbacks)
+- [x] Langfuse prompt management — prompts fetched from dashboard at call time, hardcoded fallbacks if unreachable
+      Prompt names: `summarize-document`, `summarize-chunk`, `summarize-reduce`, `generate-flashcards`, `generate-quiz`
+- [x] Langfuse observability — every LLM call traced, prompt versions linked to traces
+- [x] Long document handling — chunk text, map-reduce summarization via LangChain
+- [x] Pydantic response models — strict validation
+- [x] Structured JSON logging
+- [x] `GET /health`
+- [x] Dockerfile
 
 **Tests (must be green before worktree is considered done):**
 - [ ] Unit: `test_api_key_middleware` — missing/wrong key returns 401
