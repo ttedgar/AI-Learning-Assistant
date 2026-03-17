@@ -34,8 +34,10 @@ public class User {
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "supabase_user_id", unique = true, nullable = false)
-    private String supabaseUserId;
+    // Production note: supabase_user_id is stored as uuid in Postgres (Supabase's native type
+    // for auth.uid()). The JWT sub claim is a UUID string; callers must UUID.fromString(sub).
+    @Column(name = "supabase_user_id", unique = true, nullable = false, columnDefinition = "uuid")
+    private UUID supabaseUserId;
 
     @Column(nullable = false)
     private String email;
