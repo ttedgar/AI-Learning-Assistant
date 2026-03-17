@@ -113,7 +113,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      GEMINI_API_KEY:   ${GEMINI_API_KEY}
+      GOOGLE_API_KEY:   ${GEMINI_API_KEY}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       ENVIRONMENT:      prod
     restart: unless-stopped
