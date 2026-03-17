@@ -11,6 +11,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.test.web.servlet.client.MockMvcWebTestClient;
 import org.springframework.web.context.WebApplicationContext;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Integration test: full Spring Boot application context + real infrastructure via Testcontainers.
@@ -32,6 +33,7 @@ import org.springframework.web.context.WebApplicationContext;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @Import(TestcontainersConfiguration.class)
 @ActiveProfiles("test")
+@Testcontainers(disabledWithoutDocker = true)
 class HealthEndpointIT {
 
     @Autowired
