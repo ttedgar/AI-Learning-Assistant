@@ -100,6 +100,35 @@ quiz_questions
 
 ## Worktree Workflow
 
+### Docker — build and test your service
+
+Each service is defined in `docker-compose.yml`. After implementing, build and test your service in Docker before considering the worktree done.
+
+```bash
+# Build and (re)start your service
+docker compose up -d --build <service>   # e.g. backend, worker, frontend, ai-service
+
+# Watch logs
+docker compose logs -f <service>
+
+# Check all containers
+docker compose ps
+```
+
+**WSL2 networking:** Docker ports are exposed on the Windows host, not on WSL localhost.
+- From WSL you cannot `curl http://localhost:8080` directly.
+- Option A — test from Windows PowerShell: `curl http://localhost:8080/api/v1/health`
+- Option B — test from within the Docker network:
+  ```bash
+  docker run --rm --network ai-learning-assistant_default curlimages/curl:latest \
+    http://<service>:<port>/api/v1/health
+  ```
+- Exception: `http://localhost:5173` (frontend) works directly in the Windows browser.
+
+**Docker network name:** `ai-learning-assistant_default`
+
+---
+
 ### How to work with worktrees
 
 **Starting a worktree session:**
@@ -255,6 +284,15 @@ GET    /api/v1/documents/{id}/quiz        ← get quiz questions
 - [ ] Integration: `DocumentControllerIT` — Testcontainers, full upload flow via HTTP
 - [ ] Integration: `DocumentProcessedConsumerIT` — consume mock message, verify DB updated
 
+### Docker
+```bash
+docker compose up -d --build backend
+docker compose logs -f backend
+# Test from within Docker network (WSL2 — see Docker section above):
+docker run --rm --network ai-learning-assistant_default curlimages/curl:latest \
+  http://backend:8080/api/v1/health
+```
+
 ### Messages
 
 `document.processing` (backend → worker):
@@ -313,6 +351,15 @@ RabbitMQ consumer — downloads PDF, extracts text, calls ai-service, publishes 
 - [ ] Unit: `AiServiceClientTest` — mock HTTP server, verify correct request/response handling
 - [ ] Unit: `RetryTest` — simulate ai-service failure, verify 3 retries with backoff
 - [ ] Integration: `WorkerConsumerIT` — Testcontainers RabbitMQ, consume real message, verify published result
+
+### Docker
+```bash
+docker compose up -d --build worker
+docker compose logs -f worker
+# Test from within Docker network (WSL2 — see Docker section above):
+docker run --rm --network ai-learning-assistant_default curlimages/curl:latest \
+  http://worker:8080/api/v1/health
+```
 
 ### Flow
 ```
@@ -439,6 +486,14 @@ App shell, routing, Google OAuth, dashboard, upload page. Clean minimal SaaS aes
 - [ ] Unit: `ProtectedRoute.test.tsx` — unauthenticated user redirected to /
 - [ ] Unit: `UploadPage.test.tsx` — non-PDF file rejected, PDF accepted
 - [ ] Unit: `StatusBadge.test.tsx` — correct badge rendered for each status
+
+### Docker
+```bash
+docker compose up -d --build frontend
+docker compose logs -f frontend
+# Frontend is served by Nginx — open directly in Windows browser:
+# http://localhost:5173
+```
 
 ---
 
