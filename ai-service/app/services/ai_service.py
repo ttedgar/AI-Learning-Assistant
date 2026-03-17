@@ -165,13 +165,12 @@ _FLASHCARDS_PROMPT = PromptTemplate(
 _QUIZ_PROMPT = PromptTemplate(
     input_variables=["text"],
     template=(
-        "You are an expert educator. Generate 5 quiz questions from the following text. "
-        "Mix MULTIPLE_CHOICE and OPEN_ENDED questions (at least 2 of each type).\n\n"
+        "You are an expert educator. Generate 5 multiple choice quiz questions from the following text. "
+        "Every question must have exactly 4 options and one correct answer.\n\n"
         "Return ONLY a JSON array — no markdown, no code fences — in this exact format:\n"
         "[\n"
         '  {{"question": "...", "type": "MULTIPLE_CHOICE", "correct_answer": "...", '
-        '"options": ["option1", "option2", "option3", "option4"]}},\n'
-        '  {{"question": "...", "type": "OPEN_ENDED", "correct_answer": "...", "options": null}}\n'
+        '"options": ["option1", "option2", "option3", "option4"]}}\n'
         "]\n\n"
         "Text:\n{text}\n\n"
         "Quiz JSON:"
