@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.util.List;
 import java.util.UUID;
@@ -52,9 +54,11 @@ public class QuizQuestion {
     private String correctAnswer;
 
     // JSONB column — null for OPEN_ENDED; list of option strings for MULTIPLE_CHOICE.
-    // Production: hypersistence-utils JsonType gives first-class JSONB support without a custom converter.
+    // @JdbcTypeCode(SqlTypes.JSON) tells Hibernate 6 to use Jackson for (de)serialisation
+    // and bind the value with the correct JDBC JSON type — no custom converter needed.
+    // Production: same approach; hypersistence-utils adds extra features (indexing, etc.).
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    @Convert(converter = StringListJsonConverter.class)
     private List<String> options;
 
     public QuizQuestion(Document document, String question, QuizType type,
