@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { supabase } from './supabase'
+import useAuthStore from '../stores/authStore'
 
 /**
  * Axios instance pre-configured with the backend base URL.
@@ -7,14 +7,18 @@ import { supabase } from './supabase'
  * Bearer token on every outbound request, so no page-level code needs
  * to handle auth headers manually.
  *
- * Production note: add a response interceptor that refreshes the session
- * on 401 and retries once before redirecting to login.
+ * Token source: Zustand authStore (populated by supabase.auth.onAuthStateChange in App.jsx).
+ * This is synchronous — we never call supabase.auth.getSession() here because that can
+ * trigger an async token refresh that hangs indefinitely on a slow network, blocking the
+ * interceptor and preventing any HTTP request from being sent.
+ *
+ * Production note: add a response interceptor that handles 401 by redirecting to login.
  */
 const api = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_URL,
 })
 
-api.interceptors.request.use(async (config) => {
+api.interceptors.request.use((config) => {
   // Dev auth bypass: inject sentinel headers instead of a real Supabase JWT.
   // VITE_DEV_AUTH is only set to "true" in docker-compose.dev.yml; never in production.
   // Production equivalent: Bearer token validated against Supabase JWKS (ES256).
@@ -22,10 +26,9 @@ api.interceptors.request.use(async (config) => {
     config.headers['X-Dev-User-Id']    = import.meta.env.VITE_DEV_USER_ID
     config.headers['X-Dev-User-Email'] = import.meta.env.VITE_DEV_USER_EMAIL
   } else {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
+    // Read the session synchronously from the Zustand store.
+    // onAuthStateChange in App.jsx keeps this up-to-date (including token refreshes).
+    const { session } = useAuthStore.getState()
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`
     }
