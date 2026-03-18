@@ -10,6 +10,9 @@ import LandingPage from './pages/LandingPage'
 import DashboardPage from './pages/DashboardPage'
 import UploadPage from './pages/UploadPage'
 import DocumentPage from './pages/DocumentPage'
+import HowToUsePage from './pages/HowToUsePage'
+import TechnicalPage from './pages/TechnicalPage'
+import DiaryPage from './pages/DiaryPage'
 
 /**
  * Single QueryClient instance for the whole app.
@@ -112,6 +115,10 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* Public info pages */}
+          <Route path="/how-to-use" element={<HowToUsePage />} />
+          <Route path="/technical" element={<TechnicalPage />} />
+          <Route path="/diary" element={<DiaryPage />} />
           {/* Catch-all: redirect unknown paths to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

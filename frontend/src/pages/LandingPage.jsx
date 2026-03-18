@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import useAuthStore from '../stores/authStore'
 import useDarkMode from '../hooks/useDarkMode'
 
@@ -87,7 +87,20 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-400 dark:text-gray-600">
-        AI Learning Assistant — built with React, Spring Boot, and Gemini.
+        <p className="mb-3">AI Learning Assistant — built with React, Spring Boot, and Gemini.</p>
+        <nav className="flex items-center justify-center gap-5">
+          <Link to="/how-to-use" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
+            How to Use
+          </Link>
+          <span>·</span>
+          <Link to="/technical" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
+            Technical Information
+          </Link>
+          <span>·</span>
+          <Link to="/diary" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
+            Development Diary
+          </Link>
+        </nav>
       </footer>
     </div>
   )
