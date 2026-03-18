@@ -25,11 +25,32 @@ const queryClient = new QueryClient({
   },
 })
 
+const DEV_AUTH   = import.meta.env.VITE_DEV_AUTH === 'true'
+const DEV_USER_ID    = import.meta.env.VITE_DEV_USER_ID
+const DEV_USER_EMAIL = import.meta.env.VITE_DEV_USER_EMAIL
+
 export default function App() {
   const setSession = useAuthStore((s) => s.setSession)
   const setLoading = useAuthStore((s) => s.setLoading)
+  const setDevUser = useAuthStore((s) => s.setDevUser)
 
   useEffect(() => {
+    if (DEV_AUTH) {
+      // Dev auth bypass: skip Google OAuth entirely and populate the store with a
+      // synthetic user. The axios interceptor injects X-Dev-* headers so the backend
+      // authenticates via DevAuthFilter instead of validating a JWT.
+      // Then call /auth/sync to ensure this user exists in the backend DB.
+      // Production equivalent: supabase.auth.onAuthStateChange → setSession → Bearer JWT.
+      setDevUser(DEV_USER_ID, DEV_USER_EMAIL)
+      api
+        .post('/api/v1/auth/sync', {
+          supabaseUserId: DEV_USER_ID,
+          email: DEV_USER_EMAIL,
+        })
+        .catch((err) => console.error('[auth] Dev sync failed:', err))
+      return
+    }
+
     // Resolve the initial session synchronously from local storage then
     // confirm with the server. Until this resolves, loading=true prevents
     // ProtectedRoute from flashing a redirect.
@@ -60,7 +81,7 @@ export default function App() {
     })
 
     return () => subscription.unsubscribe()
-  }, [setSession, setLoading])
+  }, [setSession, setLoading, setDevUser])
 
   return (
     <QueryClientProvider client={queryClient}>

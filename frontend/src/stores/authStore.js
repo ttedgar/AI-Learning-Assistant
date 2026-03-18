@@ -23,6 +23,17 @@ const useAuthStore = create((set) => ({
 
   setLoading: (loading) => set({ loading }),
 
+  /**
+   * Populates auth state with a synthetic dev user, bypassing Supabase OAuth.
+   * Called by App.jsx when VITE_DEV_AUTH=true. Session is null because there is
+   * no real Supabase session — the axios interceptor injects X-Dev-* headers instead.
+   *
+   * Production equivalent: setSession() called by supabase.auth.onAuthStateChange
+   * with a real Session containing a signed ES256 JWT.
+   */
+  setDevUser: (id, email) =>
+    set({ user: { id, email }, session: null, loading: false }),
+
   loginWithGoogle: async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',

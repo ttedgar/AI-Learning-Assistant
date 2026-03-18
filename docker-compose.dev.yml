@@ -1,0 +1,32 @@
+# Dev override for docker-compose.yml.
+#
+# Activates the Spring "dev" profile on the backend (DevSecurityConfig + DevAuthFilter)
+# and bakes dev auth variables into the frontend Vite bundle so the app auto-logs in
+# as the fixed sentinel user without triggering Google OAuth.
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#
+# Fixed dev user: 00000000-0000-0000-0000-000000000001 / dev@local.test
+# All dev data in Supabase belongs to this UUID — easy to identify and clean up.
+#
+# SECURITY: Never use this override in production. The X-Dev-* headers are trusted
+# unconditionally by DevAuthFilter; any caller can impersonate any user ID.
+
+version: "3.9"
+
+services:
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      # Suppress the DEBUG-level security logging that docker-compose.yml enables;
+      # application-dev.yml sets it to WARN, but the env var here takes precedence
+      # if left from the base compose file.
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: WARN
+
+  frontend:
+    build:
+      args:
+        VITE_DEV_AUTH: "true"
+        VITE_DEV_USER_ID: "00000000-0000-0000-0000-000000000001"
+        VITE_DEV_USER_EMAIL: "dev@local.test"

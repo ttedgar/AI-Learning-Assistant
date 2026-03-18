@@ -1,0 +1,12 @@
+# Dev profile overrides.
+# Loaded automatically when SPRING_PROFILES_ACTIVE=dev (set in docker-compose.dev.yml).
+# All values not listed here fall through to application.yml.
+#
+# Key differences from prod:
+#   - No JWKS configuration needed — DevSecurityConfig replaces oauth2ResourceServer.
+#   - Security logging at WARN (prod uses DEBUG for JWT troubleshooting).
+#   - Liquibase remains enabled so schema stays in sync with changelog.
+
+logging:
+  level:
+    org.springframework.security: WARN

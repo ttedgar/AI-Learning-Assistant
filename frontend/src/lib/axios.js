@@ -15,12 +15,20 @@ const api = axios.create({
 })
 
 api.interceptors.request.use(async (config) => {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  // Dev auth bypass: inject sentinel headers instead of a real Supabase JWT.
+  // VITE_DEV_AUTH is only set to "true" in docker-compose.dev.yml; never in production.
+  // Production equivalent: Bearer token validated against Supabase JWKS (ES256).
+  if (import.meta.env.VITE_DEV_AUTH === 'true') {
+    config.headers['X-Dev-User-Id']    = import.meta.env.VITE_DEV_USER_ID
+    config.headers['X-Dev-User-Email'] = import.meta.env.VITE_DEV_USER_EMAIL
+  } else {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
-  if (session?.access_token) {
-    config.headers.Authorization = `Bearer ${session.access_token}`
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`
+    }
   }
 
   return config

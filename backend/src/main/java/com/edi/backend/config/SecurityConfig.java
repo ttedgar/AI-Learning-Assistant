@@ -11,6 +11,7 @@ import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -54,6 +55,7 @@ import java.util.List;
  */
 @Configuration
 @EnableWebSecurity
+@Profile("!dev")
 public class SecurityConfig {
 
     /**
