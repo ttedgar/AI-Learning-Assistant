@@ -21,9 +21,9 @@ export default function LandingPage() {
   }, [user, loading, navigate])
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 transition-colors duration-200">
+    <div className="min-h-screen bg-white dark:bg-gray-950 transition-colors duration-200 flex flex-col">
       {/* Nav */}
-      <header className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+      <header className="max-w-7xl w-full mx-auto px-6 py-5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
             <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -52,7 +52,8 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-4xl mx-auto px-6 pt-24 pb-32 text-center">
+      <section className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="max-w-4xl w-full text-center">
         <div className="inline-flex items-center gap-2 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 rounded-full px-3 py-1 text-xs font-medium mb-6">
           <span className="h-1.5 w-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400" />
           Powered by Gemini AI
@@ -83,10 +84,11 @@ export default function LandingPage() {
         </button>
 
         <p className="text-xs text-gray-400 dark:text-gray-600 mt-4">Free to use. No credit card required.</p>
+        </div>
       </section>
 
       {/* Footer */}
-      <footer className="max-w-7xl mx-auto px-6 py-8 text-center text-xs text-gray-400 dark:text-gray-600">
+      <footer className="max-w-7xl w-full mx-auto px-6 py-8 text-center text-xs text-gray-400 dark:text-gray-600">
         <p className="mb-3">AI Learning Assistant — built with React, Spring Boot, and Gemini.</p>
         <nav className="flex items-center justify-center gap-5">
           <Link to="/how-to-use" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
