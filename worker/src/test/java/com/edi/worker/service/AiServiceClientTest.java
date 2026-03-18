@@ -50,7 +50,7 @@ class AiServiceClientTest {
                         """)
                 .addHeader("Content-Type", "application/json"));
 
-        String summary = client.summarize("some text");
+        String summary = client.summarize("some text").block();
 
         assertThat(summary).isEqualTo("This is the summary.");
 
@@ -64,7 +64,7 @@ class AiServiceClientTest {
     void summarize_throwsOn500() {
         mockServer.enqueue(new MockResponse().setResponseCode(500));
 
-        assertThatThrownBy(() -> client.summarize("text"))
+        assertThatThrownBy(() -> client.summarize("text").block())
                 .isInstanceOf(WebClientResponseException.class);
     }
 
@@ -83,7 +83,7 @@ class AiServiceClientTest {
                         """)
                 .addHeader("Content-Type", "application/json"));
 
-        List<FlashcardDto> flashcards = client.generateFlashcards("text");
+        List<FlashcardDto> flashcards = client.generateFlashcards("text").block();
 
         assertThat(flashcards).hasSize(2);
         assertThat(flashcards.get(0).getQuestion()).isEqualTo("What is X?");
@@ -112,7 +112,7 @@ class AiServiceClientTest {
                         """)
                 .addHeader("Content-Type", "application/json"));
 
-        List<QuizQuestionDto> quiz = client.generateQuiz("text");
+        List<QuizQuestionDto> quiz = client.generateQuiz("text").block();
 
         assertThat(quiz).hasSize(1);
         QuizQuestionDto q = quiz.get(0);
@@ -130,7 +130,7 @@ class AiServiceClientTest {
     void generateQuiz_throwsOn401() {
         mockServer.enqueue(new MockResponse().setResponseCode(401));
 
-        assertThatThrownBy(() -> client.generateQuiz("text"))
+        assertThatThrownBy(() -> client.generateQuiz("text").block())
                 .isInstanceOf(WebClientResponseException.class);
     }
 }

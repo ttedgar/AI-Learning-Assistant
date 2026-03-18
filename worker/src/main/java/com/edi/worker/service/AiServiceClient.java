@@ -14,17 +14,18 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import java.util.List;
 import java.util.Map;
 
+import reactor.core.publisher.Mono;
+
 /**
  * HTTP client for the ai-service (FastAPI).
  *
- * <p>All calls are blocking — the worker's AMQP listener thread is inherently blocking.
- * The {@code X-Internal-Api-Key} header is pre-attached via the {@code aiServiceWebClient} bean.
+ * <p>All methods return {@link Mono} — callers compose them with {@code Mono.zip()}
+ * to run summary, flashcards, and quiz calls concurrently rather than sequentially.
+ * The single {@code .block()} lives in the consumer, not here.
  *
- * <p>The ai-service uses snake_case JSON field names ({@code correct_answer}).
- * Inner response DTOs map these to camelCase using {@link JsonProperty}.
- *
- * <p>Production note: mTLS would replace the static API key; circuit-breaker
- * (Resilience4j) would wrap these calls to fail fast if ai-service is unhealthy.
+ * <p>The {@code X-Internal-Api-Key} header is pre-attached via the {@code aiServiceWebClient} bean.
+ * Production note: mTLS would replace the static API key; Resilience4j circuit-breaker
+ * would wrap these calls to fail fast if ai-service is unhealthy.
  */
 @Slf4j
 @Service
@@ -36,58 +37,49 @@ public class AiServiceClient {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    public String summarize(String text) {
+    public Mono<String> summarize(String text) {
         log.info("Calling ai-service /ai/summarize");
-        SummarizeResponse response = aiServiceWebClient.post()
+        return aiServiceWebClient.post()
                 .uri("/ai/summarize")
                 .bodyValue(Map.of("text", text))
                 .retrieve()
                 .bodyToMono(SummarizeResponse.class)
-                .block();
-        if (response == null) {
-            throw new IllegalStateException("Null response from /ai/summarize");
-        }
-        return response.getSummary();
+                .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/summarize")))
+                .map(SummarizeResponse::getSummary);
     }
 
-    public List<FlashcardDto> generateFlashcards(String text) {
+    public Mono<List<FlashcardDto>> generateFlashcards(String text) {
         log.info("Calling ai-service /ai/flashcards");
-        FlashcardsResponse response = aiServiceWebClient.post()
+        return aiServiceWebClient.post()
                 .uri("/ai/flashcards")
                 .bodyValue(Map.of("text", text))
                 .retrieve()
                 .bodyToMono(FlashcardsResponse.class)
-                .block();
-        if (response == null || response.getFlashcards() == null) {
-            throw new IllegalStateException("Null response from /ai/flashcards");
-        }
-        return response.getFlashcards().stream()
-                .map(f -> FlashcardDto.builder()
-                        .question(f.getQuestion())
-                        .answer(f.getAnswer())
-                        .build())
-                .toList();
+                .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/flashcards")))
+                .map(r -> r.getFlashcards().stream()
+                        .map(f -> FlashcardDto.builder()
+                                .question(f.getQuestion())
+                                .answer(f.getAnswer())
+                                .build())
+                        .toList());
     }
 
-    public List<QuizQuestionDto> generateQuiz(String text) {
+    public Mono<List<QuizQuestionDto>> generateQuiz(String text) {
         log.info("Calling ai-service /ai/quiz");
-        QuizResponse response = aiServiceWebClient.post()
+        return aiServiceWebClient.post()
                 .uri("/ai/quiz")
                 .bodyValue(Map.of("text", text))
                 .retrieve()
                 .bodyToMono(QuizResponse.class)
-                .block();
-        if (response == null || response.getQuestions() == null) {
-            throw new IllegalStateException("Null response from /ai/quiz");
-        }
-        return response.getQuestions().stream()
-                .map(q -> QuizQuestionDto.builder()
-                        .question(q.getQuestion())
-                        .type(q.getType())
-                        .correctAnswer(q.getCorrectAnswer())
-                        .options(q.getOptions())
-                        .build())
-                .toList();
+                .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/quiz")))
+                .map(r -> r.getQuestions().stream()
+                        .map(q -> QuizQuestionDto.builder()
+                                .question(q.getQuestion())
+                                .type(q.getType())
+                                .correctAnswer(q.getCorrectAnswer())
+                                .options(q.getOptions())
+                                .build())
+                        .toList());
     }
 
     // ── Response DTOs (private — not part of the worker's public API) ────────

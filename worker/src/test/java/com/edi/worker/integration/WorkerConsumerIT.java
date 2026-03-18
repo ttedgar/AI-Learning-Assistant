@@ -80,14 +80,14 @@ class WorkerConsumerIT {
         // Arrange — stub dependencies
         when(pdfDownloader.download(anyString())).thenReturn(new byte[]{1, 2, 3});
         when(pdfTextExtractor.extractText(any())).thenReturn("extracted pdf text");
-        when(aiServiceClient.summarize(anyString())).thenReturn("Great summary");
+        when(aiServiceClient.summarize(anyString())).thenReturn(reactor.core.publisher.Mono.just("Great summary"));
         when(aiServiceClient.generateFlashcards(anyString())).thenReturn(
-                List.of(DocumentProcessedMessage.FlashcardDto.builder()
-                        .question("Q1").answer("A1").build()));
+                reactor.core.publisher.Mono.just(List.of(DocumentProcessedMessage.FlashcardDto.builder()
+                        .question("Q1").answer("A1").build())));
         when(aiServiceClient.generateQuiz(anyString())).thenReturn(
-                List.of(DocumentProcessedMessage.QuizQuestionDto.builder()
+                reactor.core.publisher.Mono.just(List.of(DocumentProcessedMessage.QuizQuestionDto.builder()
                         .question("Quiz Q1").type("MULTIPLE_CHOICE")
-                        .correctAnswer("A").options(List.of("A", "B", "C", "D")).build()));
+                        .correctAnswer("A").options(List.of("A", "B", "C", "D")).build())));
 
         // Publish a DocumentProcessingMessage to the processing queue
         DocumentProcessingMessage input = new DocumentProcessingMessage();

@@ -13,6 +13,8 @@ import org.springframework.retry.support.RetryTemplate;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+import reactor.core.publisher.Mono;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -77,9 +79,9 @@ class RetryTest {
                 .thenThrow(new RuntimeException("transient error"))
                 .thenReturn(fakePdf);
         when(pdfTextExtractor.extractText(fakePdf)).thenReturn("extracted text");
-        when(aiServiceClient.summarize(anyString())).thenReturn("summary");
-        when(aiServiceClient.generateFlashcards(anyString())).thenReturn(java.util.List.of());
-        when(aiServiceClient.generateQuiz(anyString())).thenReturn(java.util.List.of());
+        when(aiServiceClient.summarize(anyString())).thenReturn(Mono.just("summary"));
+        when(aiServiceClient.generateFlashcards(anyString())).thenReturn(Mono.just(java.util.List.of()));
+        when(aiServiceClient.generateQuiz(anyString())).thenReturn(Mono.just(java.util.List.of()));
 
         RetryTemplate retryTemplate = buildRetryTemplate(3);
 

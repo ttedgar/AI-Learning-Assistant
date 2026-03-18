@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+import reactor.core.publisher.Mono;
+
 /**
  * Consumes messages from {@code document.processing} and orchestrates the full
  * processing pipeline: download → extract → AI → publish result.
@@ -59,20 +61,24 @@ public class DocumentProcessingConsumer {
             // 2. Extract plain text via PDFBox
             String text = pdfTextExtractor.extractText(pdfBytes);
 
-            // 3. Call ai-service — chunking / map-reduce is handled inside ai-service
-            String            summary    = aiServiceClient.summarize(text);
-            List<FlashcardDto> flashcards = aiServiceClient.generateFlashcards(text);
-            List<QuizQuestionDto> quiz   = aiServiceClient.generateQuiz(text);
-
-            // 4. Publish DONE result — backend saves everything to DB
-            DocumentProcessedMessage result = DocumentProcessedMessage.builder()
-                    .correlationId(message.getCorrelationId())
-                    .documentId(message.getDocumentId())
-                    .status("DONE")
-                    .summary(summary)
-                    .flashcards(flashcards)
-                    .quiz(quiz)
-                    .build();
+            // 3. Call ai-service — all three run concurrently via Mono.zip.
+            //    Mono.zip fires all three HTTP calls simultaneously and waits for all
+            //    to complete before mapping to the result. The single .block() below
+            //    is the only blocking point in this pipeline.
+            //    Step 2 (Reactor RabbitMQ) will remove this .block() entirely.
+            DocumentProcessedMessage result = Mono.zip(
+                            aiServiceClient.summarize(text),
+                            aiServiceClient.generateFlashcards(text),
+                            aiServiceClient.generateQuiz(text))
+                    .map(tuple -> DocumentProcessedMessage.builder()
+                            .correlationId(message.getCorrelationId())
+                            .documentId(message.getDocumentId())
+                            .status("DONE")
+                            .summary(tuple.getT1())
+                            .flashcards(tuple.getT2())
+                            .quiz(tuple.getT3())
+                            .build())
+                    .block();
 
             rabbitTemplate.convertAndSend(
                     RabbitMqConfig.DOCUMENT_EXCHANGE,
