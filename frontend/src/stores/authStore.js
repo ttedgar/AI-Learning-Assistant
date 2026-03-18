@@ -44,8 +44,11 @@ const useAuthStore = create((set) => ({
   },
 
   logout: async () => {
-    await supabase.auth.signOut()
+    // Clear local state FIRST so any navigation triggered after this call
+    // (e.g. navigate('/') in AppLayout) sees user=null immediately and
+    // LandingPage's useEffect does not bounce the user back to /dashboard.
     set({ user: null, session: null })
+    await supabase.auth.signOut()
   },
 }))
 

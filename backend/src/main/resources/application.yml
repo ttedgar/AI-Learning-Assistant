@@ -39,6 +39,11 @@ spring:
     port: ${SPRING_RABBITMQ_PORT:5672}
     username: ${SPRING_RABBITMQ_USERNAME:guest}
     password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    # Fail fast if RabbitMQ is unreachable rather than blocking the HTTP request thread.
+    # Without this, convertAndSend() blocks indefinitely on a dropped connection,
+    # causing upload requests to hang until Railway's load balancer kills them.
+    # Production: tune based on observed p99 reconnect latency.
+    connection-timeout: 5000
 
   # ── Cache / Rate Limiting ─────────────────────────────────────────────────────
   # Production: Redis Cluster with TLS; locally Redis runs in Docker

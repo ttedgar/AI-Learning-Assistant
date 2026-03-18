@@ -2,6 +2,7 @@ package com.edi.backend.exception;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -122,6 +123,28 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problem.setType(TYPE_BAD_REQUEST);
         problem.setTitle("Bad Request");
+        return problem;
+    }
+
+    /**
+     * Handles unique-constraint violations from concurrent auth/sync requests.
+     *
+     * <p>When two requests race to create the same user (e.g., concurrent uploads),
+     * one succeeds and the other gets a unique constraint violation on supabase_user_id.
+     * The user exists — treat this as success (200-equivalent) rather than an error,
+     * but return 409 so the caller can distinguish it from a genuine 200.
+     * The frontend auth/sync call ignores non-200 responses, so this is safe.
+     *
+     * <p>Production: use an UPSERT (INSERT ... ON CONFLICT DO UPDATE) in the repository
+     * to eliminate the race condition entirely and always return 200.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation (likely concurrent insert): {}", ex.getMostSpecificCause().getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "Resource already exists.");
+        problem.setType(URI.create("/errors/conflict"));
+        problem.setTitle("Conflict");
         return problem;
     }
 
