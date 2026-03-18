@@ -45,7 +45,7 @@ function useDocumentData(id) {
 // ── Shared skeleton primitive ───────────────────────────────────────────────
 
 function Skeleton({ className }) {
-  return <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
+  return <div className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${className}`} />
 }
 
 // ── Tab: Summary ─────────────────────────────────────────────────────────────
@@ -81,17 +81,17 @@ function SummaryTab({ data, isLoading, isError }) {
      */
     <ReactMarkdown
       components={{
-        h1: ({ children }) => <h1 className="text-lg font-semibold text-gray-900 mt-6 mb-2">{children}</h1>,
-        h2: ({ children }) => <h2 className="text-base font-semibold text-gray-900 mt-5 mb-1.5">{children}</h2>,
-        h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-900 mt-4 mb-1">{children}</h3>,
-        p: ({ children }) => <p className="text-sm text-gray-700 leading-relaxed mb-3">{children}</p>,
-        ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-3 text-sm text-gray-700">{children}</ul>,
-        ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-3 text-sm text-gray-700">{children}</ol>,
-        li: ({ children }) => <li className="text-sm text-gray-700">{children}</li>,
-        strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-        em: ({ children }) => <em className="italic text-gray-700">{children}</em>,
+        h1: ({ children }) => <h1 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-base font-semibold text-gray-900 dark:text-white mt-5 mb-1.5">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-sm font-semibold text-gray-900 dark:text-white mt-4 mb-1">{children}</h3>,
+        p: ({ children }) => <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-3">{children}</p>,
+        ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-3 text-sm text-gray-700 dark:text-gray-300">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-3 text-sm text-gray-700 dark:text-gray-300">{children}</ol>,
+        li: ({ children }) => <li className="text-sm text-gray-700 dark:text-gray-300">{children}</li>,
+        strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-white">{children}</strong>,
+        em: ({ children }) => <em className="italic text-gray-700 dark:text-gray-300">{children}</em>,
         blockquote: ({ children }) => (
-          <blockquote className="border-l-4 border-indigo-200 pl-4 italic text-gray-500 my-3">
+          <blockquote className="border-l-4 border-indigo-200 dark:border-indigo-700 pl-4 italic text-gray-500 dark:text-gray-400 my-3">
             {children}
           </blockquote>
         ),
@@ -108,7 +108,7 @@ function FlashcardsTab({ data, isLoading, isError }) {
   if (isLoading) {
     return (
       <div className="flex justify-center">
-        <div className="w-full max-w-lg h-52 animate-pulse bg-gray-200 rounded-2xl" />
+        <div className="w-full max-w-lg h-52 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-2xl" />
       </div>
     )
   }
@@ -162,7 +162,7 @@ function QuizTab({ data, isLoading, isError }) {
 function OriginalTab({ fileUrl, isLoading }) {
   if (isLoading) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center animate-pulse">
+      <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center animate-pulse">
         <Skeleton className="h-12 w-12 mx-auto mb-4 rounded-full" />
         <Skeleton className="h-4 w-1/2 mx-auto mb-6" />
         <Skeleton className="h-9 w-32 mx-auto rounded-lg" />
@@ -180,13 +180,13 @@ function OriginalTab({ fileUrl, isLoading }) {
      * using react-pdf (PDF.js wrapper) for inline viewing without leaving the
      * app. The download link is a universally accessible fallback.
      */
-    <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center">
-      <div className="h-14 w-14 mx-auto mb-4 rounded-xl bg-red-50 flex items-center justify-center">
+    <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center">
+      <div className="h-14 w-14 mx-auto mb-4 rounded-xl bg-red-50 dark:bg-red-950 flex items-center justify-center">
         <svg className="h-7 w-7 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
         </svg>
       </div>
-      <p className="text-sm text-gray-600 mb-6">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
         Open or download the original PDF document.
       </p>
       <a
@@ -220,7 +220,7 @@ export default function DocumentPage() {
         {/* Back button */}
         <Link
           to="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors mb-6"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-6"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
@@ -239,14 +239,14 @@ export default function DocumentPage() {
             <p className="text-sm text-red-500">Failed to load document.</p>
           ) : (
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-xl font-semibold text-gray-900">{doc?.title}</h1>
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{doc?.title}</h1>
               {doc?.status && <StatusBadge status={doc.status} />}
             </div>
           )}
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 mb-6">
+        <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
           <nav className="flex gap-1" role="tablist">
             {TABS.map((tab) => (
               <button
@@ -256,8 +256,8 @@ export default function DocumentPage() {
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   activeTab === tab
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                 }`}
               >
                 {tab}

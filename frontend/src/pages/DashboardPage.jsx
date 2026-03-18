@@ -29,13 +29,13 @@ function useDocuments() {
 function EmptyState() {
   return (
     <div className="text-center py-24">
-      <div className="mx-auto h-12 w-12 rounded-xl bg-indigo-50 flex items-center justify-center mb-4">
+      <div className="mx-auto h-12 w-12 rounded-xl bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center mb-4">
         <svg className="h-6 w-6 text-indigo-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
         </svg>
       </div>
-      <h3 className="text-sm font-semibold text-gray-900 mb-1">No documents yet</h3>
-      <p className="text-sm text-gray-500 mb-6">Upload a PDF to get started.</p>
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">No documents yet</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Upload a PDF to get started.</p>
       <Link
         to="/upload"
         className="inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
@@ -57,27 +57,27 @@ function DocumentCard({ doc }) {
   })
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3 min-w-0">
-          <div className="h-9 w-9 flex-shrink-0 rounded-lg bg-red-50 flex items-center justify-center">
+          <div className="h-9 w-9 flex-shrink-0 rounded-lg bg-red-50 dark:bg-red-950 flex items-center justify-center">
             <svg className="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
             </svg>
           </div>
           <div className="min-w-0">
-            <p className="font-medium text-gray-900 text-sm truncate">{doc.title}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{createdAt}</p>
+            <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{doc.title}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{createdAt}</p>
           </div>
         </div>
         <StatusBadge status={doc.status} />
       </div>
 
       {doc.status === 'DONE' && (
-        <div className="mt-4 pt-4 border-t border-gray-100 flex gap-2">
+        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex gap-2">
           <Link
             to={`/documents/${doc.id}`}
-            className="flex-1 text-center text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+            className="flex-1 text-center text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 dark:hover:bg-indigo-900 px-3 py-1.5 rounded-lg transition-colors"
           >
             View results
           </Link>
@@ -104,7 +104,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Your documents</h1>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Your documents</h1>
             {hasActive && (
               <p className="text-xs text-blue-600 mt-1 flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
@@ -127,14 +127,14 @@ export default function DashboardPage() {
         {isLoading && (
           <div className="grid gap-4 sm:grid-cols-2">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white border border-gray-200 rounded-xl p-5 animate-pulse">
+              <div key={i} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 animate-pulse">
                 <div className="flex gap-3">
-                  <div className="h-9 w-9 rounded-lg bg-gray-100" />
+                  <div className="h-9 w-9 rounded-lg bg-gray-100 dark:bg-gray-700" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3 bg-gray-100 rounded w-3/4" />
-                    <div className="h-2.5 bg-gray-100 rounded w-1/4" />
+                    <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-3/4" />
+                    <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded w-1/4" />
                   </div>
-                  <div className="h-5 w-20 bg-gray-100 rounded-full" />
+                  <div className="h-5 w-20 bg-gray-100 dark:bg-gray-700 rounded-full" />
                 </div>
               </div>
             ))}

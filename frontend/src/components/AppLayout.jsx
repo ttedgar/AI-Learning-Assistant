@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useAuthStore from '../stores/authStore'
+import useDarkMode from '../hooks/useDarkMode'
 
 const NAV_ITEMS = [
   {
@@ -33,6 +34,7 @@ export default function AppLayout({ children }) {
   const logout = useAuthStore((s) => s.logout)
   const location = useLocation()
   const navigate = useNavigate()
+  const [dark, setDark] = useDarkMode()
 
   const handleLogout = async () => {
     await logout()
@@ -40,8 +42,8 @@ export default function AppLayout({ children }) {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden transition-colors duration-200">
+      {/* Sidebar — intentionally dark in both modes */}
       <aside className="w-64 flex-shrink-0 bg-gray-900 flex flex-col">
         {/* Logo */}
         <div className="px-6 py-5 border-b border-gray-800">
@@ -76,14 +78,33 @@ export default function AppLayout({ children }) {
           })}
         </nav>
 
-        {/* User / logout */}
-        <div className="px-3 py-4 border-t border-gray-800">
-          <div className="flex items-center gap-3 px-3 py-2 mb-1">
+        {/* User / controls */}
+        <div className="px-3 py-4 border-t border-gray-800 space-y-1">
+          <div className="flex items-center gap-3 px-3 py-2">
             <div className="h-7 w-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
               {user?.email?.[0]?.toUpperCase() ?? '?'}
             </div>
             <p className="text-gray-400 text-xs truncate">{user?.email}</p>
           </div>
+
+          {/* Dark mode toggle */}
+          <button
+            onClick={() => setDark((d) => !d)}
+            aria-label="Toggle dark mode"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+          >
+            {dark ? (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" />
+              </svg>
+            )}
+            {dark ? 'Light mode' : 'Dark mode'}
+          </button>
+
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"

@@ -1,27 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../stores/authStore'
-
-function useDarkMode() {
-  const [dark, setDark] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('theme') === 'dark' ||
-      (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  })
-
-  useEffect(() => {
-    const root = document.documentElement
-    if (dark) {
-      root.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      root.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    }
-  }, [dark])
-
-  return [dark, setDark]
-}
+import useDarkMode from '../hooks/useDarkMode'
 
 /**
  * Public landing page shown to unauthenticated visitors.
