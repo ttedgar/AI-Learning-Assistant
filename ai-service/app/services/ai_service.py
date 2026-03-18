@@ -30,6 +30,7 @@ content. Cache TTL: 24 h.
 
 import json
 import logging
+import time
 from typing import Any, Optional
 
 from langchain.prompts import PromptTemplate
@@ -243,9 +244,18 @@ def _map_reduce_summarize(text: str) -> str:
     chunks = split_text(text)
     logger.info("Starting map-reduce summarization", extra={"chunks": len(chunks)})
 
-    # Map step
+    # Map step — rate-limit-aware: pause before each call after the first.
+    # Free-tier Gemini enforces 5 RPM; chunk_call_delay_s keeps us under that.
+    # Production: remove delay when using a paid quota with higher RPM.
+    settings = get_settings()
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
+        if i > 0 and settings.chunk_call_delay_s > 0:
+            logger.debug(
+                "Rate-limit pause before chunk LLM call",
+                extra={"chunk_index": i, "delay_s": settings.chunk_call_delay_s},
+            )
+            time.sleep(settings.chunk_call_delay_s)
         logger.debug("Summarising chunk", extra={"chunk_index": i, "chunk_length": len(chunk)})
         summary = _invoke_llm(chunk_template, chunk, operation="chunk_summary")
         chunk_summaries.append(summary)
