@@ -123,6 +123,10 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_HOST:       ${LANGFUSE_HOST:-https://cloud.langfuse.com}
       ENVIRONMENT:         prod
+      # gemini-2.5-flash preview has only 20 RPD on the free tier — too few for
+      # map-reduce summarization. gemini-1.5-flash has 1,500 RPD.
+      # Production: use the latest stable model; cost/quota differs per tier.
+      GEMINI_MODEL:        ${GEMINI_MODEL:-gemini-3.1-flash-lite-preview}
     restart: unless-stopped
 
   # ── Frontend (React + Vite, served by Nginx) ──────────────────────────────

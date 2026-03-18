@@ -20,14 +20,21 @@ class Settings(BaseSettings):
 
     # Gemini
     google_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.1-flash-lite-preview"
 
     # Long-document thresholds
-    # Documents over this character count trigger map-reduce chunking.
-    # Production: this would be tuned per-model based on actual token limits.
-    long_doc_char_threshold: int = 10_000
-    chunk_size: int = 4_000
-    chunk_overlap: int = 200
+    # Gemini models have a 1M-token context window (~4 chars/token).
+    # 60,000 chars ≈ 15,000 tokens — covers ~25-page academic papers in a single
+    # call. Only truly large documents (100+ pages) trigger map-reduce.
+    # Production: tune per model; parallelise the map step with asyncio.gather.
+    long_doc_char_threshold: int = 60_000
+    chunk_size: int = 50_000
+    chunk_overlap: int = 500
+
+    # Rate-limit-aware delay between consecutive Gemini calls in the map step.
+    # Free-tier gemini-3.1-flash-lite-preview: 15 RPM — small delay is sufficient.
+    # Set to 0 in production where paid quotas remove this constraint.
+    chunk_call_delay_s: float = 5.0
 
     # Langfuse observability (optional — service starts without it)
     # Production: always set these; traces give cost, latency, and error visibility.
