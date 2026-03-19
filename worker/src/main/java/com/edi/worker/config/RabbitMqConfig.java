@@ -1,21 +1,23 @@
 package com.edi.worker.config;
 
-import com.edi.worker.recovery.DocumentProcessingRecoverer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
-import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
-import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.rabbit.retry.MessageRecoverer;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.retry.interceptor.RetryOperationsInterceptor;
+import reactor.rabbitmq.RabbitFlux;
+import reactor.rabbitmq.Receiver;
+import reactor.rabbitmq.ReceiverOptions;
+import reactor.util.retry.Retry;
+
+import java.time.Duration;
 
 /**
  * RabbitMQ topology for the worker.
@@ -23,10 +25,13 @@ import org.springframework.retry.interceptor.RetryOperationsInterceptor;
  * <p>Mirrors the backend's topology declaration — Spring AMQP's {@code RabbitAdmin}
  * is idempotent so declaring the same durable queues on startup is safe.
  *
- * <p>Retry strategy: 3 attempts, exponential back-off 1 s → 2 s.
- * After exhausting retries, the {@link DocumentProcessingRecoverer} publishes a
- * FAILED result and the message is routed to the DLQ via the dead-letter exchange
- * configured on {@code document.processing}.
+ * <p>Retry strategy: 3 total attempts (1 initial + 2 retries), exponential back-off
+ * 1 s → 2 s, capped at 4 s. Configured as a {@link Retry} bean so tests can inject
+ * a no-backoff variant without modifying the consumer.
+ *
+ * <p>After all retries are exhausted, the consumer publishes a FAILED result to
+ * {@code document.processed} and nacks the message, which is routed to the DLQ
+ * via the dead-letter exchange configured on {@code document.processing}.
  *
  * <p>Production note: at scale, retry delays would be configured per message type,
  * and the DLQ would be monitored with Datadog/PagerDuty alerts on queue depth.
@@ -39,7 +44,7 @@ public class RabbitMqConfig {
     public static final String DOCUMENT_PROCESSING_DLQ   = "document.processing.dlq";
     public static final String DOCUMENT_EXCHANGE         = "document.direct";
 
-    // ── Queue / Exchange declarations ───────────────────────────────────────
+    // ── Queue / Exchange declarations ────────────────────────────────────────
 
     @Bean
     public DirectExchange documentExchange() {
@@ -103,39 +108,38 @@ public class RabbitMqConfig {
         return template;
     }
 
-    // ── Retry + DLQ ──────────────────────────────────────────────────────────
+    // ── Reactor RabbitMQ ─────────────────────────────────────────────────────
 
     /**
-     * Listener container factory with stateless retry interceptor.
+     * Reactor RabbitMQ {@link Receiver} — replaces {@code @RabbitListener}.
      *
-     * <p>3 attempts, exponential back-off: 1 s initial, ×2 multiplier, 4 s cap.
-     * After all attempts fail, {@link DocumentProcessingRecoverer} publishes a
-     * FAILED result to {@code document.processed} then throws
-     * {@link org.springframework.amqp.AmqpRejectAndDontRequeueException}
-     * so the original message is nack'd and routed to the DLQ.
+     * <p>Extracts the underlying AMQP client {@code ConnectionFactory} from Spring's
+     * {@code CachingConnectionFactory} wrapper so Reactor RabbitMQ can manage its own
+     * connection lifecycle independently of Spring AMQP's connection pool.
      *
-     * <p>Production note: stateful retry (vs stateless) would be preferred for
-     * long-running workloads so retry state survives worker restarts. Stateless
-     * suffices here — messages are small and processing is fast.
+     * <p>Production note: configure {@code ReceiverOptions} with a dedicated connection name
+     * (e.g. {@code "worker-consumer"}) for easier identification in the RabbitMQ management UI.
      */
     @Bean
-    public SimpleRabbitListenerContainerFactory retryableListenerContainerFactory(
-            ConnectionFactory connectionFactory,
-            Jackson2JsonMessageConverter messageConverter,
-            MessageRecoverer documentProcessingRecoverer) {
+    public Receiver receiver(ConnectionFactory springConnectionFactory) {
+        com.rabbitmq.client.ConnectionFactory rabbitCf =
+                ((CachingConnectionFactory) springConnectionFactory).getRabbitConnectionFactory();
+        return RabbitFlux.createReceiver(new ReceiverOptions().connectionFactory(rabbitCf));
+    }
 
-        RetryOperationsInterceptor retryInterceptor = RetryInterceptorBuilder.stateless()
-                .maxAttempts(3)
-                .backOffOptions(1_000, 2.0, 4_000)   // 1 s, 2 s (cap 4 s)
-                .recoverer(documentProcessingRecoverer)
-                .build();
-
-        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
-        factory.setConnectionFactory(connectionFactory);
-        factory.setMessageConverter(messageConverter);
-        factory.setAdviceChain(retryInterceptor);
-        // Do not requeue on listener exception — let DLX routing handle it
-        factory.setDefaultRequeueRejected(false);
-        return factory;
+    /**
+     * Retry specification: 3 total attempts (2 retries), exponential back-off 1 s → 2 s → 4 s cap.
+     *
+     * <p>Extracted as a bean so integration and unit tests can inject a no-backoff
+     * {@code Retry.max(2)} variant to avoid slow test suites.
+     *
+     * <p>Production note: stateful retry ({@code Retry.backoff(...).transientErrors(true)})
+     * would survive worker restarts. Stateless suffices here — the processing window
+     * is short relative to the retry budget.
+     */
+    @Bean
+    public Retry documentProcessingRetry() {
+        return Retry.backoff(2, Duration.ofSeconds(1))
+                .maxBackoff(Duration.ofSeconds(4));
     }
 }
