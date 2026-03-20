@@ -4,6 +4,7 @@ import com.edi.backend.entity.Document;
 import com.edi.backend.messaging.DocumentProcessingMessage;
 import com.edi.backend.messaging.DocumentProcessingProducer;
 import com.edi.backend.repository.DocumentRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -66,13 +67,16 @@ public class StaleJobRecoveryService {
      */
     static final Duration STUCK_PENDING_THRESHOLD = Duration.ofMinutes(15);
 
-    private final DocumentRepository       documentRepository;
+    private final DocumentRepository        documentRepository;
     private final DocumentProcessingProducer producer;
+    private final MeterRegistry             meterRegistry;
 
     public StaleJobRecoveryService(DocumentRepository documentRepository,
-                                   DocumentProcessingProducer producer) {
+                                   DocumentProcessingProducer producer,
+                                   MeterRegistry meterRegistry) {
         this.documentRepository = documentRepository;
         this.producer            = producer;
+        this.meterRegistry       = meterRegistry;
     }
 
     /**
@@ -108,6 +112,7 @@ public class StaleJobRecoveryService {
         }
 
         log.warn("Recovery [stale-IN_PROGRESS]: reset {} documents to PENDING", resetCount);
+        meterRegistry.counter("document.recovery.stale_in_progress").increment(resetCount);
 
         // Read the documents we just reset — same transaction, so we see our own writes.
         // FetchType.LAZY on user requires an extra query per document; acceptable for small batches.
@@ -132,6 +137,7 @@ public class StaleJobRecoveryService {
 
         log.warn("Recovery [stuck-PENDING]: found {} documents stuck for >{} min",
                 stuck.size(), STUCK_PENDING_THRESHOLD.toMinutes());
+        meterRegistry.counter("document.recovery.stale_pending").increment(stuck.size());
 
         stuck.forEach(doc -> {
             log.warn("Recovery [stuck-PENDING]: republishing documentId={} createdAt={}",

@@ -13,12 +13,12 @@ Items marked **[DONE]** are already implemented. Items marked **[NEXT]** are the
 | Non-blocking worker (Reactor RabbitMQ) | **[DONE]** |
 | Parallel AI calls (Mono.zip) | **[DONE]** |
 | State machine + guarded transitions | **[DONE]** |
-| Backend consumer idempotency | **[NEXT — Step 2]** |
-| document.status queue + IN_PROGRESS flow | **[NEXT — Step 3]** |
-| Lease / stale job recovery | **[NEXT — Step 4]** |
-| AI service Redis idempotency | **[NEXT — Step 5]** |
-| Publisher confirms in worker | **[NEXT — Step 6]** |
-| Observability (logs + metrics) | **[NEXT — Step 7]** |
+| Backend consumer idempotency | **[DONE]** |
+| document.status queue + IN_PROGRESS flow | **[DONE]** |
+| Lease / stale job recovery | **[DONE]** |
+| AI service Redis idempotency | **[DONE]** |
+| Publisher confirms in worker | **[DONE]** |
+| Observability (logs + metrics) | **[DONE]** |
 | OpenTelemetry context propagation | Backlog |
 | Resilience4j circuit breaker | Backlog |
 | Transactional outbox | Backlog |

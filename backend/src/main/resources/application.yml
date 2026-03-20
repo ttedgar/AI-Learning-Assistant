@@ -93,10 +93,13 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when-authorized
+  metrics:
+    tags:
+      application: backend
 
 # ── API Docs ──────────────────────────────────────────────────────────────────
 # Production note: set springdoc.swagger-ui.enabled=false and springdoc.api-docs.enabled=false

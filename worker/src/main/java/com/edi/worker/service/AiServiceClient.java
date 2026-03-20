@@ -3,6 +3,8 @@ package com.edi.worker.service;
 import com.edi.worker.messaging.DocumentProcessedMessage.FlashcardDto;
 import com.edi.worker.messaging.DocumentProcessedMessage.QuizQuestionDto;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,53 +35,74 @@ import reactor.core.publisher.Mono;
 public class AiServiceClient {
 
     @Qualifier("aiServiceWebClient")
-    private final WebClient aiServiceWebClient;
+    private final WebClient     aiServiceWebClient;
+    private final MeterRegistry meterRegistry;
 
     // ── Public API ───────────────────────────────────────────────────────────
 
     public Mono<String> summarize(String text, String documentId) {
         log.info("Calling ai-service /ai/summarize");
-        return aiServiceWebClient.post()
-                .uri("/ai/summarize")
-                .bodyValue(Map.of("text", text, "document_id", documentId))
-                .retrieve()
-                .bodyToMono(SummarizeResponse.class)
-                .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/summarize")))
-                .map(SummarizeResponse::getSummary);
+        // Mono.defer ensures Timer.start() is called on each subscription (not once at build time),
+        // so every retry attempt records its own latency correctly.
+        return Mono.defer(() -> {
+            Timer.Sample sample = Timer.start(meterRegistry);
+            return aiServiceWebClient.post()
+                    .uri("/ai/summarize")
+                    .bodyValue(Map.of("text", text, "document_id", documentId))
+                    .retrieve()
+                    .bodyToMono(SummarizeResponse.class)
+                    .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/summarize")))
+                    .map(SummarizeResponse::getSummary)
+                    .doFinally(signal -> sample.stop(
+                            Timer.builder("ai.call.latency").tag("operation", "summarize")
+                                    .register(meterRegistry)));
+        });
     }
 
     public Mono<List<FlashcardDto>> generateFlashcards(String text, String documentId) {
         log.info("Calling ai-service /ai/flashcards");
-        return aiServiceWebClient.post()
-                .uri("/ai/flashcards")
-                .bodyValue(Map.of("text", text, "document_id", documentId))
-                .retrieve()
-                .bodyToMono(FlashcardsResponse.class)
-                .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/flashcards")))
-                .map(r -> r.getFlashcards().stream()
-                        .map(f -> FlashcardDto.builder()
-                                .question(f.getQuestion())
-                                .answer(f.getAnswer())
-                                .build())
-                        .toList());
+        return Mono.defer(() -> {
+            Timer.Sample sample = Timer.start(meterRegistry);
+            return aiServiceWebClient.post()
+                    .uri("/ai/flashcards")
+                    .bodyValue(Map.of("text", text, "document_id", documentId))
+                    .retrieve()
+                    .bodyToMono(FlashcardsResponse.class)
+                    .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/flashcards")))
+                    .map(r -> r.getFlashcards().stream()
+                            .map(f -> FlashcardDto.builder()
+                                    .question(f.getQuestion())
+                                    .answer(f.getAnswer())
+                                    .build())
+                            .toList())
+                    .doFinally(signal -> sample.stop(
+                            Timer.builder("ai.call.latency").tag("operation", "flashcards")
+                                    .register(meterRegistry)));
+        });
     }
 
     public Mono<List<QuizQuestionDto>> generateQuiz(String text, String documentId) {
         log.info("Calling ai-service /ai/quiz");
-        return aiServiceWebClient.post()
-                .uri("/ai/quiz")
-                .bodyValue(Map.of("text", text, "document_id", documentId))
-                .retrieve()
-                .bodyToMono(QuizResponse.class)
-                .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/quiz")))
-                .map(r -> r.getQuestions().stream()
-                        .map(q -> QuizQuestionDto.builder()
-                                .question(q.getQuestion())
-                                .type(q.getType())
-                                .correctAnswer(q.getCorrectAnswer())
-                                .options(q.getOptions())
-                                .build())
-                        .toList());
+        return Mono.defer(() -> {
+            Timer.Sample sample = Timer.start(meterRegistry);
+            return aiServiceWebClient.post()
+                    .uri("/ai/quiz")
+                    .bodyValue(Map.of("text", text, "document_id", documentId))
+                    .retrieve()
+                    .bodyToMono(QuizResponse.class)
+                    .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/quiz")))
+                    .map(r -> r.getQuestions().stream()
+                            .map(q -> QuizQuestionDto.builder()
+                                    .question(q.getQuestion())
+                                    .type(q.getType())
+                                    .correctAnswer(q.getCorrectAnswer())
+                                    .options(q.getOptions())
+                                    .build())
+                            .toList())
+                    .doFinally(signal -> sample.stop(
+                            Timer.builder("ai.call.latency").tag("operation", "quiz")
+                                    .register(meterRegistry)));
+        });
     }
 
     // ── Response DTOs (private — not part of the worker's public API) ────────

@@ -25,6 +25,9 @@ repositories {
 }
 
 dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	// Micrometer Prometheus registry — exposes /actuator/prometheus for scraping
+	implementation 'io.micrometer:micrometer-registry-prometheus'
 	implementation 'org.springframework.boot:spring-boot-starter-amqp'
 	// Reactor RabbitMQ — non-blocking consumer via Project Reactor (replaces @RabbitListener)
 	implementation 'io.projectreactor.rabbitmq:reactor-rabbitmq:1.5.6'

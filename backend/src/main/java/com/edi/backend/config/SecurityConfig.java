@@ -151,6 +151,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
                         // Actuator health for Railway readiness probes
                         .requestMatchers("/actuator/health").permitAll()
+                        // Prometheus scrape endpoint — internal network only; permitted here, protected by network ACLs in production
+                        .requestMatchers("/actuator/prometheus").permitAll()
                         // Swagger UI — publicly accessible for API exploration
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**",
                                          "/v3/api-docs/**").permitAll()

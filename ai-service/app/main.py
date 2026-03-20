@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.middleware.api_key import InternalApiKeyMiddleware
-from app.routers import flashcards, health, quiz, summarize
+from app.routers import flashcards, health, metrics, quiz, summarize
 from app.services.redis_idempotency import RedisIdempotencyService
 
 
@@ -63,6 +63,7 @@ app.add_middleware(InternalApiKeyMiddleware)
 
 # Routers
 app.include_router(health.router)
+app.include_router(metrics.router)
 app.include_router(summarize.router)
 app.include_router(flashcards.router)
 app.include_router(quiz.router)

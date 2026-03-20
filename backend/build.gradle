@@ -55,8 +55,9 @@ dependencies {
 	implementation 'com.bucket4j:bucket4j_jdk17-redis-common:8.14.0'
 	implementation 'com.bucket4j:bucket4j_jdk17-lettuce:8.14.0'
 
-	// ── Actuator ──
+	// ── Actuator + Metrics ──
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
 
 	// ── JWT — Supabase token validation via JWKS (ES256 / RS256) ──
 	// Spring's OAuth2 Resource Server fetches Supabase's public JWKS at startup,

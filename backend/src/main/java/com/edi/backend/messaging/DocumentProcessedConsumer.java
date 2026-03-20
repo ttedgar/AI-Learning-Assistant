@@ -6,6 +6,8 @@ import com.edi.backend.repository.DocumentRepository;
 import com.edi.backend.statemachine.DocumentStateMachine;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -14,6 +16,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,13 +61,16 @@ public class DocumentProcessedConsumer {
     private final DocumentRepository documentRepository;
     private final JdbcTemplate        jdbcTemplate;
     private final ObjectMapper         objectMapper;
+    private final MeterRegistry        meterRegistry;
 
     public DocumentProcessedConsumer(DocumentRepository documentRepository,
                                      JdbcTemplate jdbcTemplate,
-                                     ObjectMapper objectMapper) {
+                                     ObjectMapper objectMapper,
+                                     MeterRegistry meterRegistry) {
         this.documentRepository = documentRepository;
         this.jdbcTemplate       = jdbcTemplate;
         this.objectMapper       = objectMapper;
+        this.meterRegistry      = meterRegistry;
     }
 
     @RabbitListener(queues = RabbitMqConfig.DOCUMENT_PROCESSED_QUEUE)
@@ -113,6 +120,24 @@ public class DocumentProcessedConsumer {
 
             log.info("Document transition: {} → {} documentId={}",
                     document.getStatus(), incomingStatus, documentId);
+
+            Instant now = Instant.now();
+
+            // document.e2e.duration — total time from upload to terminal state.
+            // createdAt is always set (CreationTimestamp), so this is always recorded.
+            Timer.builder("document.e2e.duration")
+                    .tag("status", incomingStatus.name())
+                    .register(meterRegistry)
+                    .record(Duration.between(document.getCreatedAt(), now));
+
+            // document.processing.duration — time from IN_PROGRESS to terminal state.
+            // Null when the result arrived out-of-order before the status event (PENDING → DONE/FAILED).
+            if (document.getProcessingStartedAt() != null) {
+                Timer.builder("document.processing.duration")
+                        .tag("status", incomingStatus.name())
+                        .register(meterRegistry)
+                        .record(Duration.between(document.getProcessingStartedAt(), now));
+            }
 
             if (incomingStatus == DocumentStatus.DONE) {
                 saveResults(documentId, message);

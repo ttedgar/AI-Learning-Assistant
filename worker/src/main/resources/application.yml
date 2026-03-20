@@ -15,7 +15,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info
+        include: health, info, prometheus
+  metrics:
+    tags:
+      # Common tag on every metric — useful for filtering in Grafana when multiple services report to the same Prometheus
+      application: worker
 
 # ai-service connection
 ai-service:

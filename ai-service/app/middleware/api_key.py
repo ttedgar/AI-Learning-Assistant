@@ -8,7 +8,7 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
+_EXEMPT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc", "/metrics"}
 
 
 class InternalApiKeyMiddleware(BaseHTTPMiddleware):

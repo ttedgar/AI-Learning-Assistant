@@ -41,6 +41,8 @@ from typing import Any, Callable, Optional, Type
 import redis.asyncio as aioredis
 from pydantic import BaseModel
 
+from app.services.metrics import AI_CACHE_HIT, AI_CACHE_MISS, AI_REDIS_FAILURE
+
 logger = logging.getLogger(__name__)
 
 RESULT_TTL_SECONDS: int = 1800   # 30 min
@@ -92,6 +94,7 @@ class RedisIdempotencyService:
                     "AI idempotency cache HIT",
                     extra={"operation": operation, "document_id": document_id},
                 )
+                AI_CACHE_HIT.labels(operation=operation).inc()
                 return response_class.model_validate(json.loads(cached))
 
             # ── Acquire claim lock ────────────────────────────────────────────
@@ -117,6 +120,7 @@ class RedisIdempotencyService:
                 "AI idempotency cache MISS — running AI call",
                 extra={"operation": operation, "document_id": document_id},
             )
+            AI_CACHE_MISS.labels(operation=operation).inc()
             result_obj: BaseModel = await asyncio.to_thread(compute)
 
             # ── Cache the result ──────────────────────────────────────────────
@@ -134,12 +138,13 @@ class RedisIdempotencyService:
 
         except aioredis.RedisError as exc:
             # Fail open: Redis is unavailable — run AI call without caching.
-            # Production: emit a metric here (Step 7) to alert on Redis degradation.
+            # The metric alerts on-call when Redis degradation causes idempotency gaps.
             logger.warning(
                 "Redis unavailable — running AI call without idempotency: %s",
                 exc,
                 extra={"operation": operation, "document_id": document_id},
             )
+            AI_REDIS_FAILURE.inc()
             return await asyncio.to_thread(compute)
 
     async def _poll_for_result(

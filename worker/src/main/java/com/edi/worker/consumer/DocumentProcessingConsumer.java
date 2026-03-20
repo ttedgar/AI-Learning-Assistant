@@ -11,6 +11,7 @@ import com.edi.worker.service.PdfDownloader;
 import com.edi.worker.service.PdfTextExtractor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.AMQP;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -78,6 +79,7 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
     private final AiServiceClient  aiServiceClient;
     private final ObjectMapper     objectMapper;
     private final Retry            documentProcessingRetry;
+    private final MeterRegistry    meterRegistry;
 
     /**
      * Starts the reactive consumer. Called once by Spring Boot after the application
@@ -118,7 +120,12 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                                 delivery.ack();
                             })
                             .onErrorResume(e -> publishFailedResult(message, e)
-                                    .doFinally(s -> delivery.nack(false)));
+                                    .doFinally(s -> {
+                                        // Message exhausted all retries and is being routed to DLQ via nack.
+                                        meterRegistry.counter("document.dlq.routed",
+                                                "queue", RabbitMqConfig.DOCUMENT_PROCESSING_DLQ).increment();
+                                        delivery.nack(false);
+                                    }));
                 })
                 .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(5))
                         .maxBackoff(Duration.ofSeconds(60))
@@ -188,8 +195,11 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                         "DONE result",
                         message.getDocumentId()))
 
-                .doOnError(e -> log.warn("Processing failed for documentId={}, will retry if attempts remain: {}",
-                        message.getDocumentId(), e.getMessage()))
+                .doOnError(e -> {
+                    log.warn("Processing failed for documentId={}, will retry if attempts remain: {}",
+                            message.getDocumentId(), e.getMessage());
+                    meterRegistry.counter("document.retry.count", "reason", "processing_failure").increment();
+                })
                 .retryWhen(documentProcessingRetry)
 
                 .doFinally(s -> MDC.clear())
@@ -264,6 +274,8 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                         return Mono.<Void>empty();
                     } else {
                         log.error("Broker nacked {} publish for documentId={}", label, documentId);
+                        meterRegistry.counter("rabbitmq.publish.confirm.failure",
+                                "queue", routingKey).increment();
                         return Mono.error(new IllegalStateException(
                                 "Broker nacked " + label + " for documentId=" + documentId));
                     }

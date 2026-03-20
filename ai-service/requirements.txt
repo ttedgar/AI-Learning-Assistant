@@ -9,3 +9,4 @@ python-json-logger==2.0.7
 langfuse==3.14.5
 httpx==0.28.1
 redis[asyncio]==5.2.1
+prometheus-client==0.21.1
