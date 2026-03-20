@@ -1,25 +1,29 @@
 package com.edi.backend.entity;
 
 /**
- * Lifecycle of a document through the AI processing pipeline.
+ * Lifecycle states of a document through the AI processing pipeline.
  *
- * <p>State transitions:
+ * <p>Allowed transitions (see {@link com.edi.backend.statemachine.DocumentStateMachine}):
  * <pre>
- *   PENDING → PROCESSING → DONE
- *                       ↘ FAILED
+ *   PENDING → IN_PROGRESS → DONE
+ *           ↘              ↘ FAILED
+ *             DONE (out-of-order — result arrives before status event)
+ *             FAILED (out-of-order)
+ *
+ *   IN_PROGRESS → PENDING (stale recovery only — lease expired)
+ *   FAILED      → PENDING (admin reprocess only)
  * </pre>
  *
- * <p>PENDING: uploaded to Supabase Storage, published to document.processing queue, awaiting worker pickup.
- * <p>PROCESSING: worker has consumed the message and is calling the ai-service.
- * <p>DONE: worker published a successful document.processed message; results are saved in DB.
- * <p>FAILED: worker exhausted retries; error message available; message landed in DLQ.
+ * <p>PENDING:     Uploaded; {@code document.processing} message published; awaiting worker pickup.
+ * <p>IN_PROGRESS: Worker picked up the job; {@code document.status} event received; lease active.
+ * <p>DONE:        Results persisted; terminal state.
+ * <p>FAILED:      All retries exhausted; terminal state.
  *
- * <p>Stored as TEXT in PostgreSQL with a CHECK constraint (see 001-initial-schema.sql).
- * Production: add a DB index on (user_id, status) to support efficient dashboard queries.
+ * <p>Stored as TEXT in PostgreSQL with a CHECK constraint (see 002-state-machine-columns.sql).
  */
 public enum DocumentStatus {
     PENDING,
-    PROCESSING,
+    IN_PROGRESS,
     DONE,
     FAILED
 }

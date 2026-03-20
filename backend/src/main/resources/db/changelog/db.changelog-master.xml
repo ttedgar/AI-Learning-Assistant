@@ -12,5 +12,6 @@
         Production: this file is applied automatically on backend startup via Spring Boot integration.
     -->
     <include file="db/changelog/001-initial-schema.sql"/>
+    <include file="db/changelog/002-state-machine-columns.sql"/>
 
 </databaseChangeLog>

@@ -4,7 +4,7 @@ const STATUS_CONFIG = {
     dot: 'bg-yellow-400 dark:bg-yellow-500',
     label: 'Pending',
   },
-  PROCESSING: {
+  IN_PROGRESS: {
     classes: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
     dot: 'bg-blue-500 animate-pulse dark:bg-blue-400',
     label: 'Processing',
@@ -23,7 +23,7 @@ const STATUS_CONFIG = {
 
 /**
  * Renders a coloured pill badge for a document processing status.
- * Accepts any of: PENDING | PROCESSING | DONE | FAILED.
+ * Accepts any of: PENDING | IN_PROGRESS | DONE | FAILED.
  * Falls back to a neutral grey badge for unknown values.
  */
 export default function StatusBadge({ status }) {

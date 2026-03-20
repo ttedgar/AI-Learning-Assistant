@@ -76,7 +76,7 @@ AI Service (Python FastAPI)
               <ul className="space-y-2 text-gray-600 dark:text-gray-400 text-sm">
                 <li><strong className="text-gray-800 dark:text-gray-200">Auth state</strong> — Zustand store. On Google OAuth sign-in, Supabase fires <code className="text-indigo-600 dark:text-indigo-400 text-xs">onAuthStateChange</code>, which calls <code className="text-xs text-indigo-600 dark:text-indigo-400">POST /api/v1/auth/sync</code> to upsert the user in the backend DB, then stores the session in Zustand.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Axios interceptor</strong> — reads the JWT <em>synchronously</em> from <code className="text-xs text-indigo-600 dark:text-indigo-400">useAuthStore.getState()</code>. This is a deliberate choice: calling <code className="text-xs text-indigo-600 dark:text-indigo-400">supabase.auth.getSession()</code> (async) inside the interceptor can block indefinitely during a token refresh, silently preventing any request from being sent.</li>
-                <li><strong className="text-gray-800 dark:text-gray-200">Data fetching</strong> — TanStack Query. Documents in <code className="text-xs">PENDING</code> or <code className="text-xs">PROCESSING</code> state trigger 3-second polling. Completed documents use 30-second stale time.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">Data fetching</strong> — TanStack Query. Documents in <code className="text-xs">PENDING</code> or <code className="text-xs">IN_PROGRESS</code> state trigger 3-second polling. Completed documents use 30-second stale time.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Routing</strong> — React Router. <code className="text-xs text-indigo-600 dark:text-indigo-400">ProtectedRoute</code> reads the Zustand <code className="text-xs">loading</code> flag to prevent a flash-redirect to the landing page during session hydration.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Dark mode</strong> — Class-based Tailwind v4 dark mode (<code className="text-xs">@variant dark</code>). A <code className="text-xs text-indigo-600 dark:text-indigo-400">useDarkMode</code> hook reads <code className="text-xs">localStorage</code> and <code className="text-xs">prefers-color-scheme</code> on init, toggles the <code className="text-xs">.dark</code> class on <code className="text-xs">&lt;html&gt;</code>, and persists the preference.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Sign-out order</strong> — Zustand state is cleared <em>before</em> calling <code className="text-xs text-indigo-600 dark:text-indigo-400">supabase.auth.signOut()</code>. Reversing this causes a race: LandingPage's <code className="text-xs">useEffect</code> sees a non-null user during navigation and bounces back to <code className="text-xs">/dashboard</code>.</li>
@@ -239,7 +239,7 @@ documents
   user_id          UUID REFERENCES users
   title            TEXT
   file_url         TEXT                -- Supabase Storage public URL
-  status           TEXT                -- PENDING | PROCESSING | DONE | FAILED
+  status           TEXT                -- PENDING | IN_PROGRESS | DONE | FAILED
   created_at       TIMESTAMPTZ
 
 summaries

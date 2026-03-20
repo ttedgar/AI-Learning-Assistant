@@ -4,12 +4,12 @@ import api from '../lib/axios'
 import AppLayout from '../components/AppLayout'
 import StatusBadge from '../components/StatusBadge'
 
-const ACTIVE_STATUSES = new Set(['PENDING', 'PROCESSING'])
+const ACTIVE_STATUSES = new Set(['PENDING', 'IN_PROGRESS'])
 
 /**
  * Fetches the authenticated user's documents from the backend.
  * Polls every 3 seconds while any document is in an active processing state
- * (PENDING or PROCESSING) so the user sees live status updates without
+ * (PENDING or IN_PROGRESS) so the user sees live status updates without
  * manually refreshing.
  *
  * Production note: replace polling with WebSockets or SSE for lower latency

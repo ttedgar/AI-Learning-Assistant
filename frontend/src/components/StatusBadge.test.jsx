@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import StatusBadge from './StatusBadge'
 
-const STATUSES = ['PENDING', 'PROCESSING', 'DONE', 'FAILED']
+const STATUSES = ['PENDING', 'IN_PROGRESS', 'DONE', 'FAILED']
 
 describe('StatusBadge', () => {
   it.each(STATUSES)('renders a badge for status %s', (status) => {
@@ -16,8 +16,8 @@ describe('StatusBadge', () => {
     expect(screen.getByText('Pending')).toBeInTheDocument()
   })
 
-  it('displays the human-readable label for PROCESSING', () => {
-    render(<StatusBadge status="PROCESSING" />)
+  it('displays the human-readable label for IN_PROGRESS', () => {
+    render(<StatusBadge status="IN_PROGRESS" />)
     expect(screen.getByText('Processing')).toBeInTheDocument()
   })
 

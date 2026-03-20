@@ -12,7 +12,7 @@ Items marked **[DONE]** are already implemented. Items marked **[NEXT]** are the
 |---|---|
 | Non-blocking worker (Reactor RabbitMQ) | **[DONE]** |
 | Parallel AI calls (Mono.zip) | **[DONE]** |
-| State machine + guarded transitions | **[NEXT — Step 1]** |
+| State machine + guarded transitions | **[DONE]** |
 | Backend consumer idempotency | **[NEXT — Step 2]** |
 | document.status queue + IN_PROGRESS flow | **[NEXT — Step 3]** |
 | Lease / stale job recovery | **[NEXT — Step 4]** |

@@ -1,5 +1,6 @@
 package com.edi.backend.exception;
 
+import com.edi.backend.statemachine.InvalidStateTransitionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,13 +36,14 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // Relative URIs for portability; production: make absolute and point to error catalogue.
-    private static final URI TYPE_NOT_FOUND    = URI.create("/errors/not-found");
-    private static final URI TYPE_INTERNAL     = URI.create("/errors/internal");
-    private static final URI TYPE_VALIDATION   = URI.create("/errors/validation");
-    private static final URI TYPE_RATE_LIMIT   = URI.create("/errors/rate-limit-exceeded");
-    private static final URI TYPE_STORAGE      = URI.create("/errors/storage-error");
-    private static final URI TYPE_FILE_TOO_BIG = URI.create("/errors/file-too-large");
-    private static final URI TYPE_BAD_REQUEST  = URI.create("/errors/bad-request");
+    private static final URI TYPE_NOT_FOUND         = URI.create("/errors/not-found");
+    private static final URI TYPE_INTERNAL          = URI.create("/errors/internal");
+    private static final URI TYPE_VALIDATION        = URI.create("/errors/validation");
+    private static final URI TYPE_RATE_LIMIT        = URI.create("/errors/rate-limit-exceeded");
+    private static final URI TYPE_STORAGE           = URI.create("/errors/storage-error");
+    private static final URI TYPE_FILE_TOO_BIG      = URI.create("/errors/file-too-large");
+    private static final URI TYPE_BAD_REQUEST       = URI.create("/errors/bad-request");
+    private static final URI TYPE_INVALID_TRANSITION = URI.create("/errors/invalid-state-transition");
 
     /**
      * Handles the generic "resource not found" exception used for any entity type.
@@ -115,6 +117,25 @@ public class GlobalExceptionHandler {
         problem.setType(TYPE_VALIDATION);
         problem.setTitle("Validation Error");
         problem.setProperty("errors", fieldErrors);
+        return problem;
+    }
+
+    /**
+     * An explicit state transition (via {@link com.edi.backend.statemachine.DocumentStateMachine#assertAllowed})
+     * was attempted for a transition that is not in the allowed set.
+     *
+     * <p>Consumer code that uses guarded DB UPDATEs does not throw this — they observe 0 rows
+     * affected and ack silently. This handler exists for REST-layer callers (e.g. future admin API)
+     * that invoke state transitions directly.
+     */
+    @ExceptionHandler(InvalidStateTransitionException.class)
+    public ProblemDetail handleInvalidStateTransition(InvalidStateTransitionException ex) {
+        log.warn("Invalid state transition attempted: {}", ex.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setType(TYPE_INVALID_TRANSITION);
+        problem.setTitle("Invalid State Transition");
+        problem.setProperty("from", ex.getFrom().name());
+        problem.setProperty("to", ex.getTo().name());
         return problem;
     }
 

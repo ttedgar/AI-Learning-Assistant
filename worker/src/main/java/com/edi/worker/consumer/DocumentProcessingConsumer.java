@@ -22,6 +22,8 @@ import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 import reactor.util.retry.Retry;
 
+import java.time.Duration;
+
 /**
  * Reactive consumer for the {@code document.processing} queue.
  *
@@ -69,6 +71,15 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
      * Starts the reactive consumer. Called once by Spring Boot after the application
      * context is fully initialised. The subscription is non-blocking — {@code subscribe()}
      * returns immediately and processing runs in the background.
+     *
+     * <p>The outer stream carries a {@code retryWhen} with exponential backoff. If
+     * RabbitMQ is unavailable at startup (race between container start and healthcheck),
+     * or if the broker connection drops during operation, the stream resubscribes
+     * automatically. Without this, the consumer dies silently and the JVM stays alive
+     * but processing stops — Docker will not restart a container that has not exited.
+     *
+     * <p>Backoff: 5 s initial, doubles to 60 s max, unlimited retries.
+     * Production: emit a metric on each reconnection attempt (Step 7).
      */
     @Override
     public void run(ApplicationArguments args) {
@@ -97,9 +108,16 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                             .onErrorResume(e -> publishFailedResult(message, e)
                                     .doFinally(s -> delivery.nack(false)));
                 })
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(5))
+                        .maxBackoff(Duration.ofSeconds(60))
+                        .doBeforeRetry(signal -> log.warn(
+                                "Consumer stream failed (attempt {}), reconnecting in {} s: {}",
+                                signal.totalRetries() + 1,
+                                Math.min(5 * (1L << Math.min(signal.totalRetries(), 3)), 60),
+                                signal.failure().getMessage())))
                 .subscribe(
                         v -> { /* emissions are Void, nothing to handle */ },
-                        e -> log.error("Consumer stream terminated unexpectedly — worker must restart", e)
+                        e -> log.error("Consumer stream failed after exhausting retries — this should never happen with MAX_VALUE retries", e)
                 );
     }
 
