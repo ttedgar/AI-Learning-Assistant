@@ -2,12 +2,15 @@ package com.edi.backend.messaging;
 
 import com.edi.backend.config.RabbitMqConfig;
 import com.edi.backend.entity.*;
-import com.edi.backend.repository.*;
+import com.edi.backend.repository.DocumentRepository;
 import com.edi.backend.statemachine.DocumentStateMachine;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,29 +23,31 @@ import java.util.UUID;
  * <p>This is the backend side of the single-writer principle: the worker publishes results
  * here; the backend is the only service that writes to the database.
  *
- * <h3>Happy path (status=DONE)</h3>
+ * <h3>Idempotency — SELECT FOR UPDATE pattern</h3>
+ * <p>At-least-once delivery guarantees the same message can arrive more than once. The
+ * consumer uses a {@code SELECT FOR UPDATE} to serialise concurrent duplicate deliveries
+ * at the row level:
  * <ol>
- *   <li>Find the document by ID.</li>
- *   <li>Check current status via {@link DocumentStateMachine} — terminal states are acked silently.</li>
- *   <li>Save summary, flashcards, and quiz questions.</li>
- *   <li>Guarded UPDATE: {@code WHERE status IN ('PENDING','IN_PROGRESS')} → DONE.</li>
+ *   <li>Consumer A acquires the row lock; Consumer B blocks.</li>
+ *   <li>Consumer A checks status, transitions to DONE/FAILED, writes results, commits.</li>
+ *   <li>Consumer B unblocks, reads the post-commit terminal status, and acks silently.</li>
  * </ol>
  *
- * <h3>Failure path (status=FAILED)</h3>
- * <ol>
- *   <li>Find the document by ID.</li>
- *   <li>Check current status — terminal states acked silently.</li>
- *   <li>Guarded UPDATE: {@code WHERE status IN ('PENDING','IN_PROGRESS')} → FAILED.</li>
- * </ol>
+ * <h3>INSERT idempotency — ON CONFLICT DO NOTHING</h3>
+ * <p>All result inserts use native SQL with {@code ON CONFLICT DO NOTHING} as
+ * defence-in-depth, making each insert unconditionally safe to replay:
+ * <ul>
+ *   <li>Summaries: {@code ON CONFLICT (document_id) DO NOTHING} — the DB-level
+ *       {@code UNIQUE(document_id)} constraint is the hard boundary.</li>
+ *   <li>Flashcards / quiz questions: {@code ON CONFLICT (id) DO NOTHING} — the PK
+ *       is the conflict target; UUID collision is astronomically unlikely but the guard
+ *       is free to add.</li>
+ * </ul>
  *
- * <h3>Idempotency (partial — Step 2 completes this)</h3>
- * <p>Terminal-state short-circuit (DONE, FAILED) prevents re-processing duplicate deliveries.
- * Step 2 will add full {@code SELECT FOR UPDATE} idempotency with a single transaction covering
- * the status check and all result inserts, preventing concurrent duplicate writes.
- *
- * <p>Production (Step 2): wrap everything in one transaction with {@code SELECT FOR UPDATE}
- * on the document row. Current implementation has a TOCTOU gap between the status check and
- * the result inserts under concurrent duplicate delivery.
+ * <h3>Out-of-order strategy</h3>
+ * <p>Accepting {@code PENDING → DONE} is intentional. If the result arrives before the
+ * IN_PROGRESS status event (Step 3), the result is valid regardless. The late IN_PROGRESS
+ * event is silently ignored (0 rows on the guarded UPDATE). See {@link DocumentStateMachine}.
  */
 @Component
 public class DocumentProcessedConsumer {
@@ -50,32 +55,33 @@ public class DocumentProcessedConsumer {
     private static final Logger log = LoggerFactory.getLogger(DocumentProcessedConsumer.class);
 
     private final DocumentRepository documentRepository;
-    private final SummaryRepository summaryRepository;
-    private final FlashcardRepository flashcardRepository;
-    private final QuizQuestionRepository quizQuestionRepository;
+    private final JdbcTemplate        jdbcTemplate;
+    private final ObjectMapper         objectMapper;
 
     public DocumentProcessedConsumer(DocumentRepository documentRepository,
-                                     SummaryRepository summaryRepository,
-                                     FlashcardRepository flashcardRepository,
-                                     QuizQuestionRepository quizQuestionRepository) {
+                                     JdbcTemplate jdbcTemplate,
+                                     ObjectMapper objectMapper) {
         this.documentRepository = documentRepository;
-        this.summaryRepository = summaryRepository;
-        this.flashcardRepository = flashcardRepository;
-        this.quizQuestionRepository = quizQuestionRepository;
+        this.jdbcTemplate       = jdbcTemplate;
+        this.objectMapper       = objectMapper;
     }
 
     @RabbitListener(queues = RabbitMqConfig.DOCUMENT_PROCESSED_QUEUE)
     @Transactional
     public void consume(DocumentProcessedMessage message) {
         MDC.put("correlationId", message.correlationId());
-        MDC.put("documentId", message.documentId());
+        MDC.put("documentId",    message.documentId());
 
         try {
             log.info("Received document.processed: documentId={} status={}",
                     message.documentId(), message.status());
 
             UUID documentId = UUID.fromString(message.documentId());
-            Document document = documentRepository.findById(documentId)
+
+            // SELECT FOR UPDATE — serialises concurrent duplicate deliveries.
+            // The second consumer blocks here until the first commits; it then reads
+            // the post-commit terminal status and takes the short-circuit path below.
+            Document document = documentRepository.findByIdForUpdate(documentId)
                     .orElseThrow(() -> {
                         log.error("Document not found for processed message: documentId={}", documentId);
                         // Ack and drop — retrying won't help if the document doesn't exist.
@@ -84,18 +90,16 @@ public class DocumentProcessedConsumer {
                         return new IllegalStateException("Document not found: " + documentId);
                     });
 
-            DocumentStatus incomingStatus = "DONE".equals(message.status())
-                    ? DocumentStatus.DONE
-                    : DocumentStatus.FAILED;
-
-            // Terminal-state short-circuit: ack silently if already in a terminal state.
-            // This handles duplicate deliveries (at-least-once) and out-of-order events.
-            // Full SELECT FOR UPDATE idempotency is added in Step 2.
+            // Terminal-state short-circuit (evaluated post-lock, so this is safe under concurrency).
             if (DocumentStateMachine.isTerminal(document.getStatus())) {
                 log.info("Document already in terminal state {} — acking silently: documentId={}",
                         document.getStatus(), documentId);
                 return;
             }
+
+            DocumentStatus incomingStatus = "DONE".equals(message.status())
+                    ? DocumentStatus.DONE
+                    : DocumentStatus.FAILED;
 
             // Guarded transition: 1 row = success, 0 rows = guard failed (lost race or duplicate).
             int rowsAffected = documentRepository.guardedTransition(
@@ -107,12 +111,11 @@ public class DocumentProcessedConsumer {
                 return;
             }
 
+            log.info("Document transition: {} → {} documentId={}",
+                    document.getStatus(), incomingStatus, documentId);
+
             if (incomingStatus == DocumentStatus.DONE) {
-                saveResults(document, message);
-                log.info("Document transition: {} → DONE documentId={}", document.getStatus(), documentId);
-            } else {
-                log.warn("Document transition: {} → FAILED documentId={} reason={}",
-                        document.getStatus(), documentId, message.errorMessage());
+                saveResults(documentId, message);
             }
 
         } finally {
@@ -121,28 +124,68 @@ public class DocumentProcessedConsumer {
         }
     }
 
-    private void saveResults(Document document, DocumentProcessedMessage message) {
+    /**
+     * Persists the AI-generated results using native SQL with {@code ON CONFLICT DO NOTHING}
+     * on each insert. All three inserts run in the same transaction as the status transition.
+     *
+     * <p>Using {@link JdbcTemplate} directly gives us control over the exact SQL and avoids
+     * Hibernate's entity lifecycle overhead for bulk inserts. JdbcTemplate automatically
+     * participates in the active Spring-managed transaction.
+     */
+    private void saveResults(UUID documentId, DocumentProcessedMessage message) {
         if (message.summary() != null) {
-            summaryRepository.save(new Summary(document, message.summary()));
+            // UNIQUE(document_id) is the hard constraint; ON CONFLICT DO NOTHING is the
+            // application-layer safety net so a duplicate doesn't throw an exception.
+            jdbcTemplate.update("""
+                    INSERT INTO summaries (id, document_id, content)
+                    VALUES (gen_random_uuid(), ?, ?)
+                    ON CONFLICT (document_id) DO NOTHING
+                    """,
+                    documentId, message.summary());
         }
 
-        if (message.flashcards() != null) {
-            List<Flashcard> flashcards = message.flashcards().stream()
-                    .map(f -> new Flashcard(document, f.question(), f.answer()))
+        if (message.flashcards() != null && !message.flashcards().isEmpty()) {
+            List<Object[]> rows = message.flashcards().stream()
+                    .map(f -> new Object[]{UUID.randomUUID(), documentId, f.question(), f.answer()})
                     .toList();
-            flashcardRepository.saveAll(flashcards);
+            jdbcTemplate.batchUpdate("""
+                    INSERT INTO flashcards (id, document_id, question, answer)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT (id) DO NOTHING
+                    """, rows);
         }
 
-        if (message.quiz() != null) {
-            List<QuizQuestion> questions = message.quiz().stream()
-                    .map(q -> new QuizQuestion(
-                            document,
-                            q.question(),
-                            QuizType.valueOf(q.type()),
-                            q.correctAnswer(),
-                            q.options()))
+        if (message.quiz() != null && !message.quiz().isEmpty()) {
+            List<Object[]> rows = message.quiz().stream()
+                    .map(q -> {
+                        String optionsJson = toJson(q.options());
+                        return new Object[]{
+                                UUID.randomUUID(),
+                                documentId,
+                                q.question(),
+                                q.type(),
+                                q.correctAnswer(),
+                                optionsJson
+                        };
+                    })
                     .toList();
-            quizQuestionRepository.saveAll(questions);
+            // Cast options to jsonb explicitly — JdbcTemplate binds String params as TEXT,
+            // which PostgreSQL cannot implicitly coerce to JSONB in all driver configurations.
+            jdbcTemplate.batchUpdate("""
+                    INSERT INTO quiz_questions (id, document_id, question, type, correct_answer, options)
+                    VALUES (?, ?, ?, ?, ?, ?::jsonb)
+                    ON CONFLICT (id) DO NOTHING
+                    """, rows);
+        }
+    }
+
+    private String toJson(Object value) {
+        if (value == null) return null;
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialise value to JSON: {}", e.getMessage());
+            return null;
         }
     }
 }
