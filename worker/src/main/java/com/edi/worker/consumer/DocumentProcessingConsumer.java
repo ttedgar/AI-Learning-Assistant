@@ -5,6 +5,7 @@ import com.edi.worker.messaging.DocumentProcessedMessage;
 import com.edi.worker.messaging.DocumentProcessedMessage.FlashcardDto;
 import com.edi.worker.messaging.DocumentProcessedMessage.QuizQuestionDto;
 import com.edi.worker.messaging.DocumentProcessingMessage;
+import com.edi.worker.messaging.DocumentStatusMessage;
 import com.edi.worker.service.AiServiceClient;
 import com.edi.worker.service.PdfDownloader;
 import com.edi.worker.service.PdfTextExtractor;
@@ -131,7 +132,23 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
      * can substitute a no-backoff variant and run in milliseconds.
      */
     Mono<Void> buildProcessingPipeline(DocumentProcessingMessage message) {
-        return Mono.fromCallable(() -> {
+        return Mono.fromRunnable(() -> {
+                    // Publish IN_PROGRESS status before any I/O — fast, non-blocking publish.
+                    // Enables the backend to transition PENDING→IN_PROGRESS and stamp the lease,
+                    // which is the anchor for stale job recovery (Step 4).
+                    // rabbitTemplate.convertAndSend is blocking but completes in < 5 ms on LAN.
+                    rabbitTemplate.convertAndSend(
+                            RabbitMqConfig.DOCUMENT_EXCHANGE,
+                            RabbitMqConfig.DOCUMENT_STATUS_QUEUE,
+                            DocumentStatusMessage.builder()
+                                    .correlationId(message.getCorrelationId())
+                                    .documentId(message.getDocumentId())
+                                    .status("IN_PROGRESS")
+                                    .build());
+                    log.info("Published IN_PROGRESS status for documentId={}", message.getDocumentId());
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .then(Mono.fromCallable(() -> {
                     // Runs on boundedElastic — safe for blocking PDFBox + HTTP download
                     MDC.put("correlationId", message.getCorrelationId());
                     MDC.put("documentId",    message.getDocumentId());
@@ -140,7 +157,7 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                     byte[] pdfBytes = pdfDownloader.download(message.getFileUrl());
                     return pdfTextExtractor.extractText(pdfBytes);
                 })
-                .subscribeOn(Schedulers.boundedElastic())
+                .subscribeOn(Schedulers.boundedElastic()))
 
                 // All three AI calls fire concurrently — total time = slowest call, not the sum
                 .flatMap(text -> Mono.zip(

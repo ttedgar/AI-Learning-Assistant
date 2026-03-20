@@ -35,6 +35,7 @@ public class RabbitMqConfig {
     // Queue names — shared constants used by producers and consumers in this service
     public static final String DOCUMENT_PROCESSING_QUEUE = "document.processing";
     public static final String DOCUMENT_PROCESSED_QUEUE  = "document.processed";
+    public static final String DOCUMENT_STATUS_QUEUE     = "document.status";
     public static final String DOCUMENT_PROCESSING_DLQ   = "document.processing.dlq";
 
     // Exchange name
@@ -72,11 +73,22 @@ public class RabbitMqConfig {
 
     /**
      * Result queue — worker publishes here after processing.
-     * No DLQ on this queue: the backend consumer is idempotent and won't reject messages.
+     * No DLQ: the backend consumer is idempotent and won't reject messages.
      */
     @Bean
     public Queue documentProcessedQueue() {
         return QueueBuilder.durable(DOCUMENT_PROCESSED_QUEUE).build();
+    }
+
+    /**
+     * Status queue — worker publishes IN_PROGRESS here as the first step of processing.
+     * No DLQ: the status consumer is idempotent (guarded transition returns 0 on replay).
+     * Out-of-order delivery is safe: late IN_PROGRESS events after DONE/FAILED are silently
+     * acked because the guarded UPDATE returns 0 rows (status is no longer PENDING).
+     */
+    @Bean
+    public Queue documentStatusQueue() {
+        return QueueBuilder.durable(DOCUMENT_STATUS_QUEUE).build();
     }
 
     @Bean
@@ -93,5 +105,13 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(documentProcessedQueue)
                 .to(documentExchange)
                 .with(DOCUMENT_PROCESSED_QUEUE);
+    }
+
+    @Bean
+    public Binding documentStatusBinding(Queue documentStatusQueue,
+                                         DirectExchange documentExchange) {
+        return BindingBuilder.bind(documentStatusQueue)
+                .to(documentExchange)
+                .with(DOCUMENT_STATUS_QUEUE);
     }
 }

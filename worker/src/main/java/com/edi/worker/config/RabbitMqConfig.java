@@ -41,6 +41,7 @@ public class RabbitMqConfig {
 
     public static final String DOCUMENT_PROCESSING_QUEUE = "document.processing";
     public static final String DOCUMENT_PROCESSED_QUEUE  = "document.processed";
+    public static final String DOCUMENT_STATUS_QUEUE     = "document.status";
     public static final String DOCUMENT_PROCESSING_DLQ   = "document.processing.dlq";
     public static final String DOCUMENT_EXCHANGE         = "document.direct";
 
@@ -77,6 +78,15 @@ public class RabbitMqConfig {
         return QueueBuilder.durable(DOCUMENT_PROCESSED_QUEUE).build();
     }
 
+    /**
+     * Status queue — worker publishes IN_PROGRESS here as the first step of processing.
+     * No DLQ: the backend consumer is idempotent via guarded UPDATE.
+     */
+    @Bean
+    public Queue documentStatusQueue() {
+        return QueueBuilder.durable(DOCUMENT_STATUS_QUEUE).build();
+    }
+
     @Bean
     public Binding documentProcessingBinding(Queue documentProcessingQueue,
                                               DirectExchange documentExchange) {
@@ -91,6 +101,14 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(documentProcessedQueue)
                 .to(documentExchange)
                 .with(DOCUMENT_PROCESSED_QUEUE);
+    }
+
+    @Bean
+    public Binding documentStatusBinding(Queue documentStatusQueue,
+                                         DirectExchange documentExchange) {
+        return BindingBuilder.bind(documentStatusQueue)
+                .to(documentExchange)
+                .with(DOCUMENT_STATUS_QUEUE);
     }
 
     // ── Serialisation ────────────────────────────────────────────────────────
