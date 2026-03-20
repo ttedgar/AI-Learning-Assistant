@@ -10,17 +10,19 @@ import com.edi.worker.service.AiServiceClient;
 import com.edi.worker.service.PdfDownloader;
 import com.edi.worker.service.PdfTextExtractor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rabbitmq.client.AMQP;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.ConsumeOptions;
+import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.Receiver;
+import reactor.rabbitmq.Sender;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -39,12 +41,21 @@ import java.time.Duration;
  *   consumeManualAck
  *     → deserialise JSON
  *     → flatMap: buildProcessingPipeline (retried up to 3 times total)
+ *       → sendWithConfirm: IN_PROGRESS status event → document.status
  *       → Mono.fromCallable: download PDF + extract text  (boundedElastic thread)
  *       → Mono.zip: summarize || flashcards || quiz        (Netty I/O threads)
- *       → publish DONE result to document.processed
+ *       → sendWithConfirm: DONE result → document.processed  (confirmed by broker)
  *     → ack on success
- *     → onErrorResume: publish FAILED result, nack to DLQ
+ *     → onErrorResume: sendWithConfirm FAILED result, nack to DLQ
  * </pre>
+ *
+ * <h3>Publisher Confirms (Step 6)</h3>
+ * <p>All outbound publishes use {@link Sender#sendWithPublishConfirms}, which waits for
+ * the broker's ack before the {@code Mono} completes. If the broker nacks or the
+ * channel fails, the {@code Mono} errors and the pipeline's {@code retryWhen} kicks in.
+ * This closes the data-loss window between publish and consumer ack:
+ * the processing message is only acked <em>after</em> the result is durably received
+ * by the broker.
  *
  * <p>Single writer principle: the worker never touches the database. All results
  * are published to {@code document.processed} for the backend to persist.
@@ -61,10 +72,10 @@ import java.time.Duration;
 public class DocumentProcessingConsumer implements ApplicationRunner {
 
     private final Receiver         receiver;
+    private final Sender           sender;
     private final PdfDownloader    pdfDownloader;
     private final PdfTextExtractor pdfTextExtractor;
     private final AiServiceClient  aiServiceClient;
-    private final RabbitTemplate   rabbitTemplate;
     private final ObjectMapper     objectMapper;
     private final Retry            documentProcessingRetry;
 
@@ -132,22 +143,17 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
      * can substitute a no-backoff variant and run in milliseconds.
      */
     Mono<Void> buildProcessingPipeline(DocumentProcessingMessage message) {
-        return Mono.fromRunnable(() -> {
-                    // Publish IN_PROGRESS status before any I/O — fast, non-blocking publish.
-                    // Enables the backend to transition PENDING→IN_PROGRESS and stamp the lease,
-                    // which is the anchor for stale job recovery (Step 4).
-                    // rabbitTemplate.convertAndSend is blocking but completes in < 5 ms on LAN.
-                    rabbitTemplate.convertAndSend(
-                            RabbitMqConfig.DOCUMENT_EXCHANGE,
-                            RabbitMqConfig.DOCUMENT_STATUS_QUEUE,
-                            DocumentStatusMessage.builder()
-                                    .correlationId(message.getCorrelationId())
-                                    .documentId(message.getDocumentId())
-                                    .status("IN_PROGRESS")
-                                    .build());
-                    log.info("Published IN_PROGRESS status for documentId={}", message.getDocumentId());
-                })
-                .subscribeOn(Schedulers.boundedElastic())
+        return sendWithConfirm(
+                        RabbitMqConfig.DOCUMENT_EXCHANGE,
+                        RabbitMqConfig.DOCUMENT_STATUS_QUEUE,
+                        DocumentStatusMessage.builder()
+                                .correlationId(message.getCorrelationId())
+                                .documentId(message.getDocumentId())
+                                .status("IN_PROGRESS")
+                                .build(),
+                        "IN_PROGRESS status",
+                        message.getDocumentId())
+
                 .then(Mono.fromCallable(() -> {
                     // Runs on boundedElastic — safe for blocking PDFBox + HTTP download
                     MDC.put("correlationId", message.getCorrelationId());
@@ -175,13 +181,12 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                                 .quiz(tuple.getT3())
                                 .build()))
 
-                .flatMap(result -> Mono.fromRunnable(() -> {
-                    rabbitTemplate.convertAndSend(
-                            RabbitMqConfig.DOCUMENT_EXCHANGE,
-                            RabbitMqConfig.DOCUMENT_PROCESSED_QUEUE,
-                            result);
-                    log.info("Published DONE result for documentId={}", message.getDocumentId());
-                }))
+                .flatMap(result -> sendWithConfirm(
+                        RabbitMqConfig.DOCUMENT_EXCHANGE,
+                        RabbitMqConfig.DOCUMENT_PROCESSED_QUEUE,
+                        result,
+                        "DONE result",
+                        message.getDocumentId()))
 
                 .doOnError(e -> log.warn("Processing failed for documentId={}, will retry if attempts remain: {}",
                         message.getDocumentId(), e.getMessage()))
@@ -198,12 +203,10 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
     private Mono<Void> publishFailedResult(DocumentProcessingMessage message, Throwable cause) {
         // retryWhen wraps the last failure in RetryExhaustedException — unwrap to get root cause
         Throwable root = cause.getCause() != null ? cause.getCause() : cause;
+        log.error("All retries exhausted for documentId={}, publishing FAILED result. Cause: {}",
+                message.getDocumentId(), root.getMessage());
 
-        return Mono.fromRunnable(() -> {
-            log.error("All retries exhausted for documentId={}, publishing FAILED result. Cause: {}",
-                    message.getDocumentId(), root.getMessage());
-            try {
-                rabbitTemplate.convertAndSend(
+        return sendWithConfirm(
                         RabbitMqConfig.DOCUMENT_EXCHANGE,
                         RabbitMqConfig.DOCUMENT_PROCESSED_QUEUE,
                         DocumentProcessedMessage.builder()
@@ -211,13 +214,59 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                                 .documentId(message.getDocumentId())
                                 .status("FAILED")
                                 .errorMessage(root.getMessage())
-                                .build());
-                log.info("Published FAILED result for documentId={}", message.getDocumentId());
-            } catch (Exception publishException) {
-                // Do not swallow — original message still gets nacked to DLQ below
-                log.error("Could not publish FAILED result for documentId={}",
-                        message.getDocumentId(), publishException);
-            }
-        });
+                                .build(),
+                        "FAILED result",
+                        message.getDocumentId())
+                .doOnError(publishErr -> log.error(
+                        "Could not publish FAILED result for documentId={}: {}",
+                        message.getDocumentId(), publishErr.getMessage()));
+    }
+
+    /**
+     * Publishes a single message using reactor-rabbitmq publisher confirms.
+     *
+     * <p>Waits for the broker ack before completing. A nack causes the returned
+     * {@code Mono} to error, propagating to the pipeline's {@code retryWhen}.
+     *
+     * <p>This is the core of Step 6: no processing message is acked until the broker
+     * has durably received the outbound result. Eliminates the data-loss window that
+     * exists when using fire-and-forget {@code RabbitTemplate.convertAndSend}.
+     *
+     * @param label     human-readable description for logging (e.g. "DONE result")
+     * @param documentId for logging
+     */
+    private Mono<Void> sendWithConfirm(String exchange, String routingKey,
+                                       Object payload, String label, String documentId) {
+        byte[] body;
+        try {
+            body = objectMapper.writeValueAsBytes(payload);
+        } catch (Exception e) {
+            return Mono.error(new IllegalStateException(
+                    "Failed to serialise " + label + " for documentId=" + documentId, e));
+        }
+
+        AMQP.BasicProperties props = new AMQP.BasicProperties.Builder()
+                .contentType("application/json")
+                .deliveryMode(2)  // persistent — survives broker restart
+                .build();
+
+        OutboundMessage outbound = new OutboundMessage(exchange, routingKey, props, body);
+
+        // sendWithPublishConfirms calls channel.confirmSelect() internally.
+        // It returns a Flux<OutboundMessageResult> with one element per sent message.
+        return sender.sendWithPublishConfirms(Mono.just(outbound))
+                .next()  // exactly one confirm for one message
+                .switchIfEmpty(Mono.error(new IllegalStateException(
+                        "No confirm received for " + label + " documentId=" + documentId)))
+                .flatMap(result -> {
+                    if (result.isAck()) {
+                        log.info("Published {} (confirmed) for documentId={}", label, documentId);
+                        return Mono.<Void>empty();
+                    } else {
+                        log.error("Broker nacked {} publish for documentId={}", label, documentId);
+                        return Mono.error(new IllegalStateException(
+                                "Broker nacked " + label + " for documentId=" + documentId));
+                    }
+                });
     }
 }

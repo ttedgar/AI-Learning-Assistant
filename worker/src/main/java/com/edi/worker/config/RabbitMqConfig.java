@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Configuration;
 import reactor.rabbitmq.RabbitFlux;
 import reactor.rabbitmq.Receiver;
 import reactor.rabbitmq.ReceiverOptions;
+import reactor.rabbitmq.Sender;
+import reactor.rabbitmq.SenderOptions;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -143,6 +145,27 @@ public class RabbitMqConfig {
         com.rabbitmq.client.ConnectionFactory rabbitCf =
                 ((CachingConnectionFactory) springConnectionFactory).getRabbitConnectionFactory();
         return RabbitFlux.createReceiver(new ReceiverOptions().connectionFactory(rabbitCf));
+    }
+
+    /**
+     * Reactor RabbitMQ {@link Sender} — used for all outbound publishes with
+     * publisher confirms (Step 6).
+     *
+     * <p>Uses a separate connection from the {@link Receiver} so that consumer and
+     * publisher channel pools do not compete. This matches the RabbitMQ best-practice
+     * recommendation of one connection per logical direction.
+     *
+     * <p>{@code sendWithPublishConfirms} calls {@code channel.confirmSelect()} internally —
+     * no additional broker or connection-factory configuration is required.
+     *
+     * <p>Production note: name the connection "worker-publisher" via
+     * {@code SenderOptions.connectionSupplier} for visibility in the management UI.
+     */
+    @Bean
+    public Sender sender(ConnectionFactory springConnectionFactory) {
+        com.rabbitmq.client.ConnectionFactory rabbitCf =
+                ((CachingConnectionFactory) springConnectionFactory).getRabbitConnectionFactory();
+        return RabbitFlux.createSender(new SenderOptions().connectionFactory(rabbitCf));
     }
 
     /**
