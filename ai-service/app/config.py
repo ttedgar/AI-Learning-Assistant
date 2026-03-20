@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # Redis — used for AI operation idempotency (Step 5).
+    # Fail open: if Redis is unavailable, AI calls proceed without caching.
+    # Production: always set this to a managed Redis instance (Upstash, Elasticache).
+    redis_url: str = "redis://localhost:6379"
+
     # Logging
     log_level: str = "INFO"
 

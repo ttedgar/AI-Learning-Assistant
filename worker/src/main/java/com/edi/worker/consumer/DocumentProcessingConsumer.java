@@ -159,11 +159,13 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                 })
                 .subscribeOn(Schedulers.boundedElastic()))
 
-                // All three AI calls fire concurrently — total time = slowest call, not the sum
+                // All three AI calls fire concurrently — total time = slowest call, not the sum.
+                // document_id is passed to enable Redis idempotency in the ai-service (Step 5):
+                // retries and recovery republishes return the cached result without calling Gemini.
                 .flatMap(text -> Mono.zip(
-                                aiServiceClient.summarize(text),
-                                aiServiceClient.generateFlashcards(text),
-                                aiServiceClient.generateQuiz(text))
+                                aiServiceClient.summarize(text, message.getDocumentId()),
+                                aiServiceClient.generateFlashcards(text, message.getDocumentId()),
+                                aiServiceClient.generateQuiz(text, message.getDocumentId()))
                         .map(tuple -> DocumentProcessedMessage.builder()
                                 .correlationId(message.getCorrelationId())
                                 .documentId(message.getDocumentId())

@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.models.requests import TextRequest
 from app.models.responses import FlashcardsResponse
@@ -17,11 +17,25 @@ router = APIRouter()
     tags=["ai"],
     summary="Generate flashcards from document text",
 )
-async def flashcards(request: TextRequest) -> FlashcardsResponse:
-    """Generate a set of question/answer flashcards from the provided text."""
-    logger.info("Flashcards request received", extra={"text_length": len(request.text)})
+async def flashcards(request: Request, body: TextRequest) -> FlashcardsResponse:
+    """Generate a set of question/answer flashcards from the provided text.
+
+    If ``document_id`` is provided, result is cached in Redis for 30 minutes.
+    """
+    logger.info("Flashcards request received", extra={"text_length": len(body.text)})
     try:
-        return generate_flashcards(request.text)
+        idempotency = request.app.state.idempotency
+
+        if body.document_id:
+            return await idempotency.get_or_compute(
+                operation="flashcards",
+                document_id=body.document_id,
+                compute=lambda: generate_flashcards(body.text),
+                response_class=FlashcardsResponse,
+            )
+
+        return generate_flashcards(body.text)
+
     except Exception as exc:
         logger.exception("Flashcard generation failed", extra={"error": str(exc)})
         raise HTTPException(

@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.models.requests import TextRequest
 from app.models.responses import SummaryResponse
@@ -17,16 +17,32 @@ router = APIRouter()
     tags=["ai"],
     summary="Generate a document summary",
 )
-async def summarize(request: TextRequest) -> SummaryResponse:
+async def summarize(request: Request, body: TextRequest) -> SummaryResponse:
     """
     Generate a concise summary of the provided text.
 
     Long documents (exceeding the configured character threshold) are
     automatically processed via map-reduce chunked summarization.
+
+    If ``document_id`` is provided, result is cached in Redis for 30 minutes.
+    Subsequent requests with the same document_id return the cached result
+    without calling Gemini — protecting against retry quota waste.
     """
-    logger.info("Summarize request received", extra={"text_length": len(request.text)})
+    logger.info("Summarize request received", extra={"text_length": len(body.text)})
     try:
-        return generate_summary(request.text)
+        idempotency = request.app.state.idempotency
+
+        if body.document_id:
+            return await idempotency.get_or_compute(
+                operation="summarize",
+                document_id=body.document_id,
+                compute=lambda: generate_summary(body.text),
+                response_class=SummaryResponse,
+            )
+
+        # No document_id — skip idempotency (e.g. direct API call without retry context)
+        return generate_summary(body.text)
+
     except Exception as exc:
         logger.exception("Summarization failed", extra={"error": str(exc)})
         raise HTTPException(

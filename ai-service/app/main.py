@@ -13,17 +13,36 @@ API key approach. See middleware/api_key.py for details.
 
 from contextlib import asynccontextmanager
 
+import redis.asyncio as aioredis
 from fastapi import FastAPI
 
+from app.config import get_settings
 from app.logging_config import configure_logging
 from app.middleware.api_key import InternalApiKeyMiddleware
 from app.routers import flashcards, health, quiz, summarize
+from app.services.redis_idempotency import RedisIdempotencyService
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+
+    settings = get_settings()
+
+    # Initialise Redis client. Fail open: if Redis is unreachable the service starts
+    # normally and routes skip idempotency for that request (logged as WARNING).
+    # decode_responses=False: we store raw JSON bytes, decoded manually on read.
+    redis_client = aioredis.from_url(
+        settings.redis_url,
+        decode_responses=True,  # return str not bytes for json.loads compatibility
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
+    app.state.idempotency = RedisIdempotencyService(redis_client)
+
     yield
+
+    await redis_client.aclose()
 
 
 app = FastAPI(

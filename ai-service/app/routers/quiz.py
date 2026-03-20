@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.models.requests import TextRequest
 from app.models.responses import QuizResponse
@@ -17,11 +17,25 @@ router = APIRouter()
     tags=["ai"],
     summary="Generate quiz questions from document text",
 )
-async def quiz(request: TextRequest) -> QuizResponse:
-    """Generate a mix of multiple-choice and open-ended quiz questions from the provided text."""
-    logger.info("Quiz request received", extra={"text_length": len(request.text)})
+async def quiz(request: Request, body: TextRequest) -> QuizResponse:
+    """Generate a mix of multiple-choice and open-ended quiz questions from the provided text.
+
+    If ``document_id`` is provided, result is cached in Redis for 30 minutes.
+    """
+    logger.info("Quiz request received", extra={"text_length": len(body.text)})
     try:
-        return generate_quiz(request.text)
+        idempotency = request.app.state.idempotency
+
+        if body.document_id:
+            return await idempotency.get_or_compute(
+                operation="quiz",
+                document_id=body.document_id,
+                compute=lambda: generate_quiz(body.text),
+                response_class=QuizResponse,
+            )
+
+        return generate_quiz(body.text)
+
     except Exception as exc:
         logger.exception("Quiz generation failed", extra={"error": str(exc)})
         raise HTTPException(

@@ -37,22 +37,22 @@ public class AiServiceClient {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    public Mono<String> summarize(String text) {
+    public Mono<String> summarize(String text, String documentId) {
         log.info("Calling ai-service /ai/summarize");
         return aiServiceWebClient.post()
                 .uri("/ai/summarize")
-                .bodyValue(Map.of("text", text))
+                .bodyValue(Map.of("text", text, "document_id", documentId))
                 .retrieve()
                 .bodyToMono(SummarizeResponse.class)
                 .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/summarize")))
                 .map(SummarizeResponse::getSummary);
     }
 
-    public Mono<List<FlashcardDto>> generateFlashcards(String text) {
+    public Mono<List<FlashcardDto>> generateFlashcards(String text, String documentId) {
         log.info("Calling ai-service /ai/flashcards");
         return aiServiceWebClient.post()
                 .uri("/ai/flashcards")
-                .bodyValue(Map.of("text", text))
+                .bodyValue(Map.of("text", text, "document_id", documentId))
                 .retrieve()
                 .bodyToMono(FlashcardsResponse.class)
                 .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/flashcards")))
@@ -64,11 +64,11 @@ public class AiServiceClient {
                         .toList());
     }
 
-    public Mono<List<QuizQuestionDto>> generateQuiz(String text) {
+    public Mono<List<QuizQuestionDto>> generateQuiz(String text, String documentId) {
         log.info("Calling ai-service /ai/quiz");
         return aiServiceWebClient.post()
                 .uri("/ai/quiz")
-                .bodyValue(Map.of("text", text))
+                .bodyValue(Map.of("text", text, "document_id", documentId))
                 .retrieve()
                 .bodyToMono(QuizResponse.class)
                 .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/quiz")))
