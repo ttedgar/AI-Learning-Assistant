@@ -101,9 +101,10 @@ AI Service (Python FastAPI)
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Worker — Spring Boot 3.4, Java 17</h3>
               <ul className="space-y-2 text-gray-600 dark:text-gray-400 text-sm">
                 <li><strong className="text-gray-800 dark:text-gray-200">Single writer principle</strong> — The worker never touches the database. All results are published to <code className="text-xs">document.processed</code> and the backend commits them. One service owns all writes, eliminating dual-write consistency problems.</li>
-                <li><strong className="text-gray-800 dark:text-gray-200">Flow</strong> — <code className="text-xs text-indigo-600 dark:text-indigo-400">@RabbitListener</code> on <code className="text-xs">document.processing</code> → extract <code className="text-xs">correlationId</code> into MDC → download PDF (WebClient, 5-min timeout) → extract text (Apache PDFBox) → call AI service three times (summary, flashcards, quiz) → publish <code className="text-xs">DocumentProcessedMessage</code>.</li>
-                <li><strong className="text-gray-800 dark:text-gray-200">Resilience</strong> — Spring Retry: 3 attempts, exponential backoff (1s → 2s → 4s). After exhaustion, RabbitMQ routes the message to <code className="text-xs">document.processing.dlq</code> via a dead-letter exchange. Operations can replay messages from the DLQ after fixing the root cause.</li>
-                <li><strong className="text-gray-800 dark:text-gray-200">Internal auth</strong> — All requests to the AI service include an <code className="text-xs">X-Internal-Api-Key</code> header. Production equivalent: mutual TLS between services.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">Flow</strong> — Reactive consumer (reactor-rabbitmq) on <code className="text-xs">document.processing</code> → publish <code className="text-xs">IN_PROGRESS</code> status → download PDF (WebClient) → extract text (Apache PDFBox) → call AI service concurrently via <code className="text-xs">Mono.zip</code> (summary + flashcards + quiz in parallel) → publish <code className="text-xs">DocumentProcessedMessage</code> with publisher confirms.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">Resilience</strong> — Reactor <code className="text-xs">retryWhen</code>: 3 attempts with exponential backoff. After exhaustion, a FAILED result is published to <code className="text-xs">document.processed</code> and the original message is nacked to <code className="text-xs">document.processing.dlq</code> via a dead-letter exchange. Operations can replay messages from the DLQ after fixing the root cause.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">Publisher confirms</strong> — All outbound publishes use <code className="text-xs">sendWithPublishConfirms</code>, which waits for the broker's ack before the pipeline continues. The processing message is only acked after the result is durably received by the broker — eliminating the data-loss window of fire-and-forget publishing.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">Internal auth</strong> — All requests to the AI service include an <code className="text-xs">X-Internal-Api-Key</code> header and a <code className="text-xs">X-Correlation-Id</code> header for end-to-end tracing. Production equivalent: mutual TLS between services.</li>
               </ul>
             </div>
 
@@ -113,6 +114,7 @@ AI Service (Python FastAPI)
                 <li><strong className="text-gray-800 dark:text-gray-200">DIP at architecture level</strong> — This is the only service that knows about Gemini. The worker depends on this service's HTTP interface, not on Gemini directly. Swapping the LLM (Gemini → OpenAI → Claude) requires changing only this service — worker and backend are completely isolated.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Endpoints</strong> — <code className="text-xs text-indigo-600 dark:text-indigo-400">POST /ai/summarize</code>, <code className="text-xs text-indigo-600 dark:text-indigo-400">POST /ai/flashcards</code>, <code className="text-xs text-indigo-600 dark:text-indigo-400">POST /ai/quiz</code>. All protected by <code className="text-xs">X-Internal-Api-Key</code> middleware.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Long documents</strong> — Text above 60,000 characters is chunked (50K char chunks) and processed via LangChain map-reduce: each chunk is summarised separately, then all partial summaries are reduced into one. This avoids hitting the model's context window limit.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">Redis idempotency</strong> — Each AI operation is cached by <code className="text-xs">(operation, document_id)</code> with a 24-hour TTL. Worker retries and DLQ replays return the cached result without a second Gemini call — no duplicate cost, no duplicate content.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Observability</strong> — Langfuse traces every Gemini call: prompt version, model, input tokens, output tokens, latency, response. Prompts are fetched from the Langfuse dashboard at runtime, with hardcoded fallbacks if the fetch fails.</li>
               </ul>
             </div>
@@ -132,14 +134,15 @@ AI Service (Python FastAPI)
   ├─ INSERT document    (status=PENDING)
   └─ publish ──────────► document.processing queue
                                │
-                         Worker @RabbitListener
-                         ├─ MDC.put(correlationId)
-                         ├─ download PDF      (WebClient, 5-min timeout)
+                         Worker reactive consumer (reactor-rabbitmq, QoS=2)
+                         ├─ publish ──────────► document.status queue (IN_PROGRESS)
+                         ├─ download PDF      (WebClient)
                          ├─ PDFBox text extract
-                         ├─ POST /ai/summarize
-                         ├─ POST /ai/flashcards
-                         ├─ POST /ai/quiz
-                         └─ publish ──────────► document.processed queue
+                         ├─ Mono.zip (concurrent):
+                         │    ├─ POST /ai/summarize
+                         │    ├─ POST /ai/flashcards
+                         │    └─ POST /ai/quiz
+                         └─ publish ──────────► document.processed queue (publisher confirms)
                                                        │
                                                 Backend consumer
                                                 ├─ INSERT summary
@@ -148,7 +151,7 @@ AI Service (Python FastAPI)
                                                 └─ UPDATE document status=DONE
 
 Dead-letter path:
-  After 3 worker failures → message rejected → routed to document.processing.dlq`}</CodeBlock>
+  After 3 retryWhen attempts → publish FAILED result → nack → document.processing.dlq`}</CodeBlock>
         </Section>
 
         {/* Key decisions */}
@@ -176,8 +179,8 @@ Dead-letter path:
             />
             <DecisionCard
               title="CorrelationId Tracing"
-              impl="UUID generated at upload time, embedded in the RabbitMQ message, extracted into MDC by the worker."
-              why="Every log line across both Java services carries the same correlationId — end-to-end request tracing without installing OpenTelemetry or Jaeger."
+              impl="UUID generated at upload time, embedded in the RabbitMQ message, extracted into MDC by the worker, and forwarded to the AI service via X-Correlation-Id header where a Python middleware injects it into every log record."
+              why="Every log line across all three services (backend, worker, AI service) carries the same correlationId — end-to-end request tracing without installing OpenTelemetry or Jaeger."
             />
             <DecisionCard
               title="Idempotent Auth/Sync"
@@ -272,8 +275,9 @@ quiz_questions
             <li>
               <strong className="text-gray-800 dark:text-gray-200">CorrelationId tracing</strong> — Every upload
               generates a UUID. It travels through the RabbitMQ message body, is extracted into SLF4J MDC by the
-              worker, and appears on every log line across both Java services. Manual distributed tracing without
-              OpenTelemetry or Jaeger.
+              worker, and forwarded to the AI service via <code className="text-xs">X-Correlation-Id</code> header
+              where a Python middleware stores it in a <code className="text-xs">ContextVar</code> and injects it
+              into every log record. Manual distributed tracing across all three services without OpenTelemetry or Jaeger.
             </li>
             <li>
               <strong className="text-gray-800 dark:text-gray-200">Structured logging</strong> — Logback +
@@ -304,9 +308,9 @@ quiz_questions
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-900">
                 {[
-                  ['Frontend', 'React 18, Vite, Tailwind CSS v4, Zustand, TanStack Query, React Router, Axios, Supabase JS'],
+                  ['Frontend', 'React 19, Vite, Tailwind CSS v4, Zustand, TanStack Query, React Router, Axios, Supabase JS'],
                   ['Backend', 'Java 17, Spring Boot 3.4, Spring Security, Spring AMQP, Spring Data JPA, Hibernate 6, Liquibase, Bucket4j, Springdoc OpenAPI'],
-                  ['Worker', 'Java 17, Spring Boot 3.4, Spring AMQP, Spring Retry, Apache PDFBox, WebFlux (WebClient)'],
+                  ['Worker', 'Java 17, Spring Boot 3.4, reactor-rabbitmq, Apache PDFBox, WebFlux (WebClient, Mono.zip)'],
                   ['AI Service', 'Python 3.12, FastAPI, LangChain 0.3, langchain-google-genai, Gemini 2.5 Flash, Langfuse, Pydantic'],
                   ['Database', 'PostgreSQL (Supabase), RLS, JSONB'],
                   ['Messaging', 'RabbitMQ — direct exchange, 2 queues + dead-letter queue'],

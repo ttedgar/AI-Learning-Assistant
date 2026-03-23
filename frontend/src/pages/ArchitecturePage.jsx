@@ -218,6 +218,62 @@ flowchart TD
     Publish --> Backend
 `
 
+const DIAGRAM_FILTER_CHAIN = `
+sequenceDiagram
+    participant Browser
+    participant CIF as CorrelationIdFilter<br/>@Order HIGHEST_PRECEDENCE
+    participant BTAF as BearerTokenAuthenticationFilter<br/>Spring Security built-in
+    participant Nimbus as Nimbus JWT Processor
+    participant Conv as supabaseConverter
+    participant SC as SecurityContextHolder
+    participant SJF as SupabaseJwtFilter<br/>addFilterAfter BTAF
+    participant MDC as MDC thread-local
+    participant AZ as AuthorizationFilter<br/>Spring Security built-in
+    participant Ctrl as Controller
+
+    Browser->>CIF: GET /api/v1/documents<br/>Authorization: Bearer eyJ...
+    CIF->>MDC: put correlationId
+    CIF->>BTAF: filterChain.doFilter()
+
+    BTAF->>BTAF: extract Bearer token from header
+    BTAF->>Nimbus: decode and verify JWT
+    Nimbus->>Nimbus: fetch public key from JWKS cache
+    Nimbus->>Nimbus: verify ES256 signature
+    Nimbus->>Nimbus: validate exp and nbf claims
+
+    alt Invalid JWT
+        Nimbus-->>Browser: 401 application/problem+json
+    else Valid JWT
+        Nimbus-->>Conv: verified Jwt claims
+        Conv->>Conv: extract sub + email
+        Conv->>Conv: new AuthenticatedUser(sub, email)
+        Conv->>SC: setAuthentication(UsernamePasswordAuthenticationToken)
+        SC-->>BTAF: context populated
+        BTAF->>SJF: filterChain.doFilter()
+
+        SJF->>SC: getAuthentication()
+        SC-->>SJF: AuthenticatedUser principal
+        SJF->>MDC: put userId
+        SJF->>AZ: filterChain.doFilter()
+
+        AZ->>AZ: is endpoint permitAll?
+        AZ->>SC: is context authenticated?
+
+        alt Not authenticated or forbidden
+            AZ-->>Browser: 401 or 403
+        else Authorized
+            AZ->>Ctrl: request + AuthenticatedUser principal
+            Ctrl-->>Browser: 200 response
+        end
+
+        Note over SJF: response unwinds back up the chain
+        SJF->>MDC: remove userId
+    end
+
+    Note over CIF: always runs — success or failure
+    CIF->>MDC: remove correlationId
+`
+
 // ── Diagram card component ────────────────────────────────────────────────────
 
 function DiagramCard({ title, description, definition, onOpen }) {
@@ -259,6 +315,11 @@ const DIAGRAMS = [
     title: 'Authentication & JWT Validation',
     description: 'Google OAuth handled entirely by Supabase. The backend validates ES256 tokens using only the public JWKS key — the signing secret never leaves Supabase.',
     definition: DIAGRAM_AUTH,
+  },
+  {
+    title: 'Spring Security Filter Chain',
+    description: 'Every authenticated request walks this chain top to bottom. Authentication (who are you?) and authorisation (are you allowed here?) are two separate steps. The chain unwinds on the way back — MDC cleanup always runs in finally blocks regardless of success or failure.',
+    definition: DIAGRAM_FILTER_CHAIN,
   },
   {
     title: 'Document Processing Pipeline',

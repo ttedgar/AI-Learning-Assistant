@@ -162,7 +162,7 @@ public class SecurityConfig {
                         .jwt(jwt -> jwt
                                 .decoder(jwtDecoder())
                                 .jwtAuthenticationConverter(supabaseConverter()))
-                        // Return RFC 7807 Problem Details on auth failure so the frontend
+                        // Return RFC 7807 Problem Details on auth failure to the frontend
                         // and integration tests see application/problem+json on 401.
                         .authenticationEntryPoint((request, response, ex) -> {
                             response.setStatus(HttpStatus.UNAUTHORIZED.value());
