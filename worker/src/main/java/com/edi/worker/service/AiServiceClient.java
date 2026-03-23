@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.List;
 import java.util.Map;
@@ -40,7 +39,7 @@ public class AiServiceClient {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    public Mono<String> summarize(String text, String documentId) {
+    public Mono<String> summarize(String text, String documentId, String correlationId) {
         log.info("Calling ai-service /ai/summarize");
         // Mono.defer ensures Timer.start() is called on each subscription (not once at build time),
         // so every retry attempt records its own latency correctly.
@@ -48,6 +47,7 @@ public class AiServiceClient {
             Timer.Sample sample = Timer.start(meterRegistry);
             return aiServiceWebClient.post()
                     .uri("/ai/summarize")
+                    .header("X-Correlation-Id", correlationId)
                     .bodyValue(Map.of("text", text, "document_id", documentId))
                     .retrieve()
                     .bodyToMono(SummarizeResponse.class)
@@ -59,12 +59,13 @@ public class AiServiceClient {
         });
     }
 
-    public Mono<List<FlashcardDto>> generateFlashcards(String text, String documentId) {
+    public Mono<List<FlashcardDto>> generateFlashcards(String text, String documentId, String correlationId) {
         log.info("Calling ai-service /ai/flashcards");
         return Mono.defer(() -> {
             Timer.Sample sample = Timer.start(meterRegistry);
             return aiServiceWebClient.post()
                     .uri("/ai/flashcards")
+                    .header("X-Correlation-Id", correlationId)
                     .bodyValue(Map.of("text", text, "document_id", documentId))
                     .retrieve()
                     .bodyToMono(FlashcardsResponse.class)
@@ -81,12 +82,13 @@ public class AiServiceClient {
         });
     }
 
-    public Mono<List<QuizQuestionDto>> generateQuiz(String text, String documentId) {
+    public Mono<List<QuizQuestionDto>> generateQuiz(String text, String documentId, String correlationId) {
         log.info("Calling ai-service /ai/quiz");
         return Mono.defer(() -> {
             Timer.Sample sample = Timer.start(meterRegistry);
             return aiServiceWebClient.post()
                     .uri("/ai/quiz")
+                    .header("X-Correlation-Id", correlationId)
                     .bodyValue(Map.of("text", text, "document_id", documentId))
                     .retrieve()
                     .bodyToMono(QuizResponse.class)

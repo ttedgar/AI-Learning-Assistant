@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.middleware.api_key import InternalApiKeyMiddleware
+from app.middleware.correlation_id import CorrelationIdMiddleware
 from app.routers import flashcards, health, metrics, quiz, summarize
 from app.services.redis_idempotency import RedisIdempotencyService
 
@@ -58,8 +59,11 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# Middleware — applied in reverse order (last added = outermost)
+# Middleware — applied in reverse order (last added = outermost).
+# CorrelationIdMiddleware is outermost so the ID is set before any handler runs,
+# mirroring the HIGHEST_PRECEDENCE order of CorrelationIdFilter in the Java services.
 app.add_middleware(InternalApiKeyMiddleware)
+app.add_middleware(CorrelationIdMiddleware)
 
 # Routers
 app.include_router(health.router)

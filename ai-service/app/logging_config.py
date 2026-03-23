@@ -6,6 +6,22 @@ from pythonjsonlogger import jsonlogger
 from app.config import get_settings
 
 
+class CorrelationIdFilter(logging.Filter):
+    """
+    Injects the current request's correlationId into every log record.
+
+    Reads from the ContextVar set by CorrelationIdMiddleware — no explicit
+    passing required. This is the Python equivalent of SLF4J MDC in the
+    Java services: once set, the field appears on all log lines automatically.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Import here to avoid circular import at module load time
+        from app.middleware.correlation_id import correlation_id_var
+        record.correlationId = correlation_id_var.get("")
+        return True
+
+
 def configure_logging() -> None:
     """
     Configure structured JSON logging for the application.
@@ -23,10 +39,11 @@ def configure_logging() -> None:
 
     handler = logging.StreamHandler(sys.stdout)
     formatter = jsonlogger.JsonFormatter(
-        fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+        fmt="%(asctime)s %(levelname)s %(name)s %(message)s %(correlationId)s",
         datefmt="%Y-%m-%dT%H:%M:%S",
     )
     handler.setFormatter(formatter)
+    handler.addFilter(CorrelationIdFilter())
 
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)

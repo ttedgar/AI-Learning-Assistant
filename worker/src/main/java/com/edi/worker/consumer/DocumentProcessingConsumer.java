@@ -2,8 +2,6 @@ package com.edi.worker.consumer;
 
 import com.edi.worker.config.RabbitMqConfig;
 import com.edi.worker.messaging.DocumentProcessedMessage;
-import com.edi.worker.messaging.DocumentProcessedMessage.FlashcardDto;
-import com.edi.worker.messaging.DocumentProcessedMessage.QuizQuestionDto;
 import com.edi.worker.messaging.DocumentProcessingMessage;
 import com.edi.worker.messaging.DocumentStatusMessage;
 import com.edi.worker.service.AiServiceClient;
@@ -183,9 +181,9 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                 // document_id is passed to enable Redis idempotency in the ai-service (Step 5):
                 // retries and recovery republishes return the cached result without calling Gemini.
                 .flatMap(text -> Mono.zip(
-                                aiServiceClient.summarize(text, message.getDocumentId()),
-                                aiServiceClient.generateFlashcards(text, message.getDocumentId()),
-                                aiServiceClient.generateQuiz(text, message.getDocumentId()))
+                                aiServiceClient.summarize(text, message.getDocumentId(), message.getCorrelationId()),
+                                aiServiceClient.generateFlashcards(text, message.getDocumentId(), message.getCorrelationId()),
+                                aiServiceClient.generateQuiz(text, message.getDocumentId(), message.getCorrelationId()))
                         .map(tuple -> DocumentProcessedMessage.builder()
                                 .correlationId(message.getCorrelationId())
                                 .documentId(message.getDocumentId())
