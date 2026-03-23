@@ -2,6 +2,16 @@ spring:
   application:
     name: backend
 
+  # ── Virtual Threads (Project Loom) ───────────────────────────────────────────
+  # Requires Java 21. Tomcat, task executors, and Bucket4j Redis calls all run on
+  # virtual threads. Blocking I/O (JPA, StorageService .block()) parks a virtual
+  # thread rather than an OS thread — effectively free under high concurrency.
+  # Production note: combine with WebFlux + R2DBC for full reactive stack if
+  # throughput exceeds what virtual threads can handle (extremely high scale).
+  threads:
+    virtual:
+      enabled: true
+
   # ── Database ─────────────────────────────────────────────────────────────────
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/learning_assistant}

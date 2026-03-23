@@ -1,8 +1,8 @@
 # Multi-stage build — compile in a JDK image, run in a slimmer JRE image.
 # Production note: use a distroless or hardened base image for the runtime stage
-# to reduce attack surface (e.g. gcr.io/distroless/java17-debian12).
+# to reduce attack surface (e.g. gcr.io/distroless/java21-debian12).
 
-FROM eclipse-temurin:17-jdk-alpine AS builder
+FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 COPY gradlew .
 COPY gradle gradle
@@ -10,7 +10,7 @@ COPY build.gradle settings.gradle ./
 COPY src src
 RUN sed -i 's/\r//' gradlew && chmod +x gradlew && ./gradlew bootJar -x test --no-daemon
 
-FROM eclipse-temurin:17-jre-alpine AS runtime
+FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
 
 # Run as non-root (principle of least privilege)

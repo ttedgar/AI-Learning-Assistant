@@ -2,6 +2,14 @@ spring:
   application:
     name: worker
 
+  # ── Virtual Threads (Project Loom) ───────────────────────────────────────────
+  # Requires Java 21. The boundedElastic scheduler (used for blocking PDF
+  # download and PDFBox extraction) runs on virtual threads instead of platform
+  # threads — making those operations cheaper under concurrent load.
+  threads:
+    virtual:
+      enabled: true
+
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}
