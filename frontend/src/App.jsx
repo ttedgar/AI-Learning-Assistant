@@ -12,6 +12,7 @@ import UploadPage from './pages/UploadPage'
 import DocumentPage from './pages/DocumentPage'
 import HowToUsePage from './pages/HowToUsePage'
 import TechnicalPage from './pages/TechnicalPage'
+import ArchitecturePage from './pages/ArchitecturePage'
 import DiaryPage from './pages/DiaryPage'
 
 /**
@@ -118,6 +119,7 @@ export default function App() {
           {/* Public info pages */}
           <Route path="/how-to-use" element={<HowToUsePage />} />
           <Route path="/technical" element={<TechnicalPage />} />
+          <Route path="/architecture" element={<ArchitecturePage />} />
           <Route path="/diary" element={<DiaryPage />} />
           {/* Catch-all: redirect unknown paths to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
