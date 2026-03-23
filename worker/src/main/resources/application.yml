@@ -29,3 +29,12 @@ ai-service:
 # Production: replace with mTLS client certificates
 internal:
   api-key: ${INTERNAL_API_KEY:change-me-in-prod}
+
+# RabbitMQ consumer tuning
+# qos: max messages prefetched from broker (limits concurrent in-flight processing jobs)
+# flatmap-concurrency: max simultaneous processing pipelines (should be <= qos)
+# Production: tune based on available heap and observed PDF sizes
+worker:
+  consumer:
+    qos: ${WORKER_CONSUMER_QOS:2}
+    flatmap-concurrency: ${WORKER_CONSUMER_FLATMAP_CONCURRENCY:2}

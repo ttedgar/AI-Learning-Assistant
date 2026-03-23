@@ -14,6 +14,7 @@ import com.rabbitmq.client.AMQP;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.MDC;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -81,6 +82,12 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
     private final Retry            documentProcessingRetry;
     private final MeterRegistry    meterRegistry;
 
+    @Value("${worker.consumer.qos:2}")
+    private int qos;
+
+    @Value("${worker.consumer.flatmap-concurrency:2}")
+    private int flatmapConcurrency;
+
     /**
      * Starts the reactive consumer. Called once by Spring Boot after the application
      * context is fully initialised. The subscription is non-blocking — {@code subscribe()}
@@ -101,7 +108,7 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
 
         receiver.consumeManualAck(
                         RabbitMqConfig.DOCUMENT_PROCESSING_QUEUE,
-                        new ConsumeOptions().qos(10))
+                        new ConsumeOptions().qos(qos))
                 .flatMap(delivery -> {
                     DocumentProcessingMessage message;
                     try {
@@ -126,7 +133,7 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                                                 "queue", RabbitMqConfig.DOCUMENT_PROCESSING_DLQ).increment();
                                         delivery.nack(false);
                                     }));
-                })
+                }, flatmapConcurrency)
                 .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofSeconds(5))
                         .maxBackoff(Duration.ofSeconds(60))
                         .doBeforeRetry(signal -> log.warn(
