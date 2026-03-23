@@ -93,21 +93,21 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
      * Stale IN_PROGRESS recovery: resets expired leases back to PENDING and refreshes
      * the lease timestamp so the recovery job itself doesn't re-trigger immediately.
      *
-     * <p>Returns the IDs of all reset documents so the caller can republish
-     * {@code DocumentProcessingMessage} for each. Used by {@code StaleJobRecoveryService} (Step 4).
+     * <p>Returns the number of rows reset. The caller then fetches the affected documents
+     * via {@link #findRecentlyResetDocuments} to republish them.
      *
-     * <p>Production: use {@code UPDATE ... RETURNING} via a native query for efficiency;
-     * the JPQL version below is two queries (UPDATE + SELECT) when using the entity graph.
-     * Implemented as a native query to avoid the N+1 load after the bulk update.
+     * <p>Production note: could be rewritten as a native {@code UPDATE ... RETURNING} query
+     * to collapse the UPDATE + SELECT into one round-trip, but JPQL is used here for
+     * consistency with the other guarded transitions in this repository.
      */
     @Modifying
     @Query(value = """
-            UPDATE documents
-               SET status     = 'PENDING',
-                   lease_until = :newLeaseUntil
-             WHERE status     = 'IN_PROGRESS'
-               AND lease_until < :now
-            """, nativeQuery = true)
+            UPDATE Document d
+               SET d.status     = 'PENDING',
+                   d.leaseUntil = :newLeaseUntil
+             WHERE d.status     = 'IN_PROGRESS'
+               AND d.leaseUntil < :now
+            """)
     int resetStaleInProgressJobs(@Param("now") Instant now,
                                  @Param("newLeaseUntil") Instant newLeaseUntil);
 
