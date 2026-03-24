@@ -58,7 +58,7 @@ class RedisIdempotencyService:
     """
 
     def __init__(self, client: aioredis.Redis) -> None:
-        self._r = client
+        self._redis = client
 
     @staticmethod
     def _result_key(operation: str, document_id: str) -> str:
@@ -88,7 +88,7 @@ class RedisIdempotencyService:
 
         try:
             # ── Fast path: cached result ─────────────────────────────────────
-            cached = await self._r.get(result_key)
+            cached = await self._redis.get(result_key)
             if cached is not None:
                 logger.info(
                     "AI idempotency cache HIT",
@@ -98,7 +98,7 @@ class RedisIdempotencyService:
                 return response_class.model_validate(json.loads(cached))
 
             # ── Acquire claim lock ────────────────────────────────────────────
-            acquired = await self._r.set(claim_key, "1", nx=True, ex=CLAIM_TTL_SECONDS)
+            acquired = await self._redis.set(claim_key, "1", nx=True, ex=CLAIM_TTL_SECONDS)
 
             if not acquired:
                 # Another worker is running this operation — poll for result
@@ -124,7 +124,7 @@ class RedisIdempotencyService:
             result_obj: BaseModel = await asyncio.to_thread(compute)
 
             # ── Cache the result ──────────────────────────────────────────────
-            await self._r.set(
+            await self._redis.set(
                 result_key,
                 json.dumps(result_obj.model_dump()),
                 ex=RESULT_TTL_SECONDS,
@@ -157,7 +157,7 @@ class RedisIdempotencyService:
         while elapsed < CLAIM_WAIT_SECONDS:
             await asyncio.sleep(CLAIM_POLL_INTERVAL_SECONDS)
             elapsed += CLAIM_POLL_INTERVAL_SECONDS
-            cached = await self._r.get(result_key)
+            cached = await self._redis.get(result_key)
             if cached is not None:
                 return response_class.model_validate(json.loads(cached))
         return None
