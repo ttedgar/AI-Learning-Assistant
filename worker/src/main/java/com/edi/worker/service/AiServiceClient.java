@@ -41,7 +41,7 @@ public class AiServiceClient {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    public Mono<String> summarize(String text, String documentId, String correlationId) {
+    public Mono<SummarizeResult> summarize(String text, String documentId, String correlationId) {
         log.info("Calling ai-service /ai/summarize");
         // Mono.defer ensures Timer.start() is called on each subscription (not once at build time),
         // so every retry attempt records its own latency correctly.
@@ -52,18 +52,28 @@ public class AiServiceClient {
                     .header("X-Correlation-Id", correlationId)
                     .bodyValue(Map.of("text", text, "document_id", documentId))
                     .retrieve()
-                    // 429 from ai-service means Gemini quota is exhausted. Throw RateLimitException
+                    // 429 from ai-service means OpenRouter quota is exhausted. Throw RateLimitException
                     // so the retry strategy can apply a 65 s backoff instead of the standard 1-2 s.
                     .onStatus(s -> s == HttpStatus.TOO_MANY_REQUESTS,
                             response -> Mono.error(new RateLimitException(
-                                    "ai-service returned 429 (Gemini rate limit) for /ai/summarize")))
+                                    "ai-service returned 429 (rate limit) for /ai/summarize")))
                     .bodyToMono(SummarizeResponse.class)
                     .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/summarize")))
-                    .map(SummarizeResponse::getSummary)
+                    .map(r -> new SummarizeResult(r.getSummary(), r.getModelUsed()))
                     .doFinally(signal -> sample.stop(
                             Timer.builder("ai.call.latency").tag("operation", "summarize")
                                     .register(meterRegistry)));
         });
+    }
+
+    /**
+     * Summary text and the model that generated it, as returned by ai-service.
+     * The model name is surfaced in the UI so users can see which free AI model processed their document.
+     */
+    @lombok.Value
+    public static class SummarizeResult {
+        String summary;
+        String modelUsed;
     }
 
     public Mono<List<FlashcardDto>> generateFlashcards(String text, String documentId, String correlationId) {
@@ -125,6 +135,8 @@ public class AiServiceClient {
     @Data
     static class SummarizeResponse {
         private String summary;
+        @com.fasterxml.jackson.annotation.JsonProperty("model_used")
+        private String modelUsed;
     }
 
     @Data

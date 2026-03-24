@@ -87,11 +87,18 @@ public class Document {
 
     /**
      * Machine-readable failure code set when the document transitions to FAILED.
-     * Known values: {@code RATE_LIMIT_EXCEEDED} (Gemini quota), {@code AI_UNAVAILABLE} (other).
+     * Known values: {@code RATE_LIMIT_EXCEEDED} (OpenRouter quota), {@code AI_UNAVAILABLE} (other).
      * Null for non-FAILED documents.
      */
     @Column(name = "error_code", length = 50)
     private String errorCode;
+
+    /**
+     * The AI model that generated this document's content (e.g. {@code meta-llama/llama-3.1-8b-instruct:free}).
+     * Set when the document transitions to DONE. Null for failed or pending documents.
+     */
+    @Column(name = "ai_model", length = 100)
+    private String aiModel;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)

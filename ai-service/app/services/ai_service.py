@@ -257,20 +257,25 @@ def _invoke_llm(
             },
         },
     )
-    # LangChain returns an AIMessage; extract the string content
-    return result.content if hasattr(result, "content") else str(result)
+    content = result.content if hasattr(result, "content") else str(result)
+    # OpenRouter sets model_name in response_metadata to the actual model used —
+    # important for openrouter/free which routes to random models each call.
+    model_used: str = (getattr(result, "response_metadata", None) or {}).get("model_name", "unknown")
+    return content, model_used
 
 
 # ---------------------------------------------------------------------------
 # Map-reduce summarization for long documents
 # ---------------------------------------------------------------------------
 
-def _map_reduce_summarize(text: str) -> str:
+def _map_reduce_summarize(text: str) -> tuple[str, str]:
     """
     Map-reduce summarization pipeline for documents exceeding the token threshold.
 
     Map:    summarize each chunk independently
     Reduce: combine chunk summaries into a single final summary
+
+    Returns (summary_text, model_used) — model_used reflects the reduce step.
     """
     chunk_template = _get_prompt("summarize-chunk", _CHUNK_SUMMARY_PROMPT)
     reduce_template = _get_prompt("summarize-reduce", _REDUCE_PROMPT)
@@ -278,9 +283,6 @@ def _map_reduce_summarize(text: str) -> str:
     chunks = split_text(text)
     logger.info("Starting map-reduce summarization", extra={"chunks": len(chunks)})
 
-    # Map step — rate-limit-aware: pause before each call after the first.
-    # Free-tier Gemini enforces 5 RPM; chunk_call_delay_s keeps us under that.
-    # Production: remove delay when using a paid quota with higher RPM.
     settings = get_settings()
     chunk_summaries = []
     for i, chunk in enumerate(chunks):
@@ -291,14 +293,14 @@ def _map_reduce_summarize(text: str) -> str:
             )
             time.sleep(settings.chunk_call_delay_s)
         logger.debug("Summarising chunk", extra={"chunk_index": i, "chunk_length": len(chunk)})
-        summary = _invoke_llm(chunk_template, chunk, operation="chunk_summary")
-        chunk_summaries.append(summary)
+        chunk_summary, _ = _invoke_llm(chunk_template, chunk, operation="chunk_summary")
+        chunk_summaries.append(chunk_summary)
 
-    # Reduce step
+    # Reduce step — model used here is the one we attribute in the response
     combined = "\n\n---\n\n".join(chunk_summaries)
-    final_summary = _invoke_llm(reduce_template, combined, operation="reduce")
+    final_summary, model_used = _invoke_llm(reduce_template, combined, operation="reduce")
     logger.info("Map-reduce summarization complete")
-    return final_summary
+    return final_summary, model_used
 
 
 # ---------------------------------------------------------------------------
@@ -311,12 +313,12 @@ def generate_summary(text: str) -> SummaryResponse:
     """
     if should_chunk(text):
         logger.info("Long document detected — using map-reduce path", extra={"length": len(text)})
-        summary = _map_reduce_summarize(text)
+        summary, model_used = _map_reduce_summarize(text)
     else:
         prompt_template = _get_prompt("summarize-document", _SUMMARY_PROMPT)
-        summary = _invoke_llm(prompt_template, text, operation="summarize")
+        summary, model_used = _invoke_llm(prompt_template, text, operation="summarize")
 
-    return SummaryResponse(summary=summary.strip())
+    return SummaryResponse(summary=summary.strip(), model_used=model_used)
 
 
 def generate_flashcards(text: str) -> FlashcardsResponse:
@@ -329,10 +331,10 @@ def generate_flashcards(text: str) -> FlashcardsResponse:
         text = chunks[0]  # noqa: PLW2901 — intentional narrowing for flashcard generation
 
     prompt_template = _get_prompt("generate-flashcards", _FLASHCARDS_PROMPT)
-    raw = _invoke_llm(prompt_template, text, operation="flashcards")
+    raw, model_used = _invoke_llm(prompt_template, text, operation="flashcards")
     cards_data = _parse_json_list(raw, context="flashcards")
     flashcards = [Flashcard(**card) for card in cards_data]
-    return FlashcardsResponse(flashcards=flashcards)
+    return FlashcardsResponse(flashcards=flashcards, model_used=model_used)
 
 
 def generate_quiz(text: str) -> QuizResponse:
@@ -342,10 +344,10 @@ def generate_quiz(text: str) -> QuizResponse:
         text = chunks[0]  # noqa: PLW2901 — same rationale as flashcards
 
     prompt_template = _get_prompt("generate-quiz", _QUIZ_PROMPT)
-    raw = _invoke_llm(prompt_template, text, operation="quiz")
+    raw, model_used = _invoke_llm(prompt_template, text, operation="quiz")
     questions_data = _parse_json_list(raw, context="quiz")
     questions = [QuizQuestion(**q) for q in questions_data]
-    return QuizResponse(questions=questions)
+    return QuizResponse(questions=questions, model_used=model_used)
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,8 @@ public record DocumentResponse(
         DocumentStatus status,
         /** Null unless status is FAILED. Values: {@code RATE_LIMIT_EXCEEDED}, {@code AI_UNAVAILABLE}. */
         String errorCode,
+        /** AI model that generated the content. Null unless status is DONE. */
+        String aiModel,
         Instant createdAt) {
 
     public static DocumentResponse from(Document document) {
@@ -27,6 +29,7 @@ public record DocumentResponse(
                 document.getFileUrl(),
                 document.getStatus(),
                 document.getErrorCode(),
+                document.getAiModel(),
                 document.getCreatedAt());
     }
 }

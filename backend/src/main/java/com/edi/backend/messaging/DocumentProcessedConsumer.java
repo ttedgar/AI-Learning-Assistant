@@ -141,6 +141,11 @@ public class DocumentProcessedConsumer {
 
             if (incomingStatus == DocumentStatus.DONE) {
                 saveResults(documentId, message);
+                if (message.aiModel() != null) {
+                    jdbcTemplate.update(
+                            "UPDATE documents SET ai_model = ? WHERE id = ?",
+                            message.aiModel(), documentId);
+                }
             }
 
             if (incomingStatus == DocumentStatus.FAILED && message.errorCode() != null) {

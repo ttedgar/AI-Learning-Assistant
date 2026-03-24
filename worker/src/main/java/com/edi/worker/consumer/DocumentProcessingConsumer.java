@@ -7,6 +7,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import com.edi.worker.messaging.DocumentProcessingMessage;
 import com.edi.worker.messaging.DocumentStatusMessage;
 import com.edi.worker.service.AiServiceClient;
+import com.edi.worker.service.AiServiceClient.SummarizeResult;
 import com.edi.worker.service.PdfDownloader;
 import com.edi.worker.service.PdfTextExtractor;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -186,14 +187,18 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                                 aiServiceClient.summarize(text, message.getDocumentId(), message.getCorrelationId()),
                                 aiServiceClient.generateFlashcards(text, message.getDocumentId(), message.getCorrelationId()),
                                 aiServiceClient.generateQuiz(text, message.getDocumentId(), message.getCorrelationId()))
-                        .map(tuple -> DocumentProcessedMessage.builder()
-                                .correlationId(message.getCorrelationId())
-                                .documentId(message.getDocumentId())
-                                .status("DONE")
-                                .summary(tuple.getT1())
-                                .flashcards(tuple.getT2())
-                                .quiz(tuple.getT3())
-                                .build()))
+                        .map(tuple -> {
+                            SummarizeResult summarizeResult = tuple.getT1();
+                            return DocumentProcessedMessage.builder()
+                                    .correlationId(message.getCorrelationId())
+                                    .documentId(message.getDocumentId())
+                                    .status("DONE")
+                                    .aiModel(summarizeResult.getModelUsed())
+                                    .summary(summarizeResult.getSummary())
+                                    .flashcards(tuple.getT2())
+                                    .quiz(tuple.getT3())
+                                    .build();
+                        }))
 
                 .flatMap(result -> sendWithConfirm(
                         RabbitMqConfig.DOCUMENT_EXCHANGE,

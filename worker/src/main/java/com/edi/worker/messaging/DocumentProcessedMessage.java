@@ -31,10 +31,13 @@ public class DocumentProcessedMessage {
 
     /**
      * Machine-readable failure code; null on success.
-     * Known values: {@code RATE_LIMIT_EXCEEDED} (Gemini 429), {@code AI_UNAVAILABLE} (other AI errors).
+     * Known values: {@code RATE_LIMIT_EXCEEDED} (OpenRouter 429), {@code AI_UNAVAILABLE} (other AI errors).
      * The backend stores this in the documents table so the frontend can display a specific message.
      */
     private String errorCode;
+
+    /** The AI model that generated the summary (e.g. {@code meta-llama/llama-3.1-8b-instruct:free}). Null on failure. */
+    private String aiModel;
 
     private String summary;
     private List<FlashcardDto> flashcards;
