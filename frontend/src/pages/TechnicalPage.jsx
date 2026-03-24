@@ -84,8 +84,9 @@ AI Service (Python FastAPI)
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Backend — Spring Boot 3.4, Java 17</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Backend — Spring Boot 3.4, Java 21</h3>
               <ul className="space-y-2 text-gray-600 dark:text-gray-400 text-sm">
+                <li><strong className="text-gray-800 dark:text-gray-200">Virtual threads</strong> — Spring Boot 3.4 on Java 21 with <code className="text-xs text-indigo-600 dark:text-indigo-400">spring.threads.virtual.enabled=true</code>. Every HTTP request and <code className="text-xs">@Async</code> task runs on a virtual thread — no thread pool tuning, no blocking-I/O bottlenecks under high concurrency. Production note: monitor for pinned carriers when using <code className="text-xs">synchronized</code> blocks with blocking calls inside.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Security</strong> — Spring Security OAuth2 Resource Server. JWT validation uses Nimbus with Supabase's public JWKS endpoint (ES256). The backend never holds the signing secret — only the public key is used. JWKS responses are cached for 15 minutes and refreshed every 5 minutes.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">JWT mapping</strong> — A custom <code className="text-xs text-indigo-600 dark:text-indigo-400">Converter&lt;Jwt, AuthenticatedUser&gt;</code> extracts the <code className="text-xs">sub</code> and <code className="text-xs">email</code> claims and returns a typed principal used throughout the application layer.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Upload flow</strong> — Rate check → resolve local user → upload to Supabase Storage (WebClient) → <code className="text-xs">INSERT Document(status=PENDING)</code> → publish <code className="text-xs">DocumentProcessingMessage</code> to <code className="text-xs">document.processing</code> with a <code className="text-xs">correlationId</code>.</li>
@@ -98,8 +99,9 @@ AI Service (Python FastAPI)
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Worker — Spring Boot 3.4, Java 17</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Worker — Spring Boot 3.4, Java 21</h3>
               <ul className="space-y-2 text-gray-600 dark:text-gray-400 text-sm">
+                <li><strong className="text-gray-800 dark:text-gray-200">Virtual threads</strong> — Also running on Java 21 virtual threads. The reactive <code className="text-xs">reactor-rabbitmq</code> pipeline is non-blocking by nature, but virtual threads benefit the WebClient-based PDF download and AI service calls that park on I/O.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Single writer principle</strong> — The worker never touches the database. All results are published to <code className="text-xs">document.processed</code> and the backend commits them. One service owns all writes, eliminating dual-write consistency problems.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Flow</strong> — Reactive consumer (reactor-rabbitmq) on <code className="text-xs">document.processing</code> → publish <code className="text-xs">IN_PROGRESS</code> status → download PDF (WebClient) → extract text (Apache PDFBox) → call AI service concurrently via <code className="text-xs">Mono.zip</code> (summary + flashcards + quiz in parallel) → publish <code className="text-xs">DocumentProcessedMessage</code> with publisher confirms.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Resilience</strong> — Reactor <code className="text-xs">retryWhen</code>: 3 attempts with exponential backoff. After exhaustion, a FAILED result is published to <code className="text-xs">document.processed</code> and the original message is nacked to <code className="text-xs">document.processing.dlq</code> via a dead-letter exchange. Operations can replay messages from the DLQ after fixing the root cause.</li>
@@ -308,9 +310,9 @@ quiz_questions
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-900">
                 {[
-                  ['Frontend', 'React 19, Vite, Tailwind CSS v4, Zustand, TanStack Query, React Router, Axios, Supabase JS'],
-                  ['Backend', 'Java 17, Spring Boot 3.4, Spring Security, Spring AMQP, Spring Data JPA, Hibernate 6, Liquibase, Bucket4j, Springdoc OpenAPI'],
-                  ['Worker', 'Java 17, Spring Boot 3.4, reactor-rabbitmq, Apache PDFBox, WebFlux (WebClient, Mono.zip)'],
+                  ['Frontend', 'React 19, Vite, Tailwind CSS v4, Zustand, TanStack Query, React Router, Axios, Supabase JS, @xyflow/react'],
+                  ['Backend', 'Java 21 (virtual threads), Spring Boot 3.4, Spring Security, Spring AMQP, Spring Data JPA, Hibernate 6, Liquibase, Bucket4j, Springdoc OpenAPI'],
+                  ['Worker', 'Java 21 (virtual threads), Spring Boot 3.4, reactor-rabbitmq, Apache PDFBox, WebFlux (WebClient, Mono.zip)'],
                   ['AI Service', 'Python 3.12, FastAPI, LangChain 0.3, langchain-google-genai, Gemini 2.5 Flash, Langfuse, Pydantic'],
                   ['Database', 'PostgreSQL (Supabase), RLS, JSONB'],
                   ['Messaging', 'RabbitMQ — direct exchange, 2 queues + dead-letter queue'],
