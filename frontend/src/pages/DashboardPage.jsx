@@ -97,17 +97,38 @@ function DocumentCard({ doc }) {
           </div>
           <div className="min-w-0 flex-1">
             {renaming ? (
-              <input
-                autoFocus
-                className="w-full text-sm font-medium text-gray-900 dark:text-white bg-transparent border border-indigo-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') submitRename()
-                  if (e.key === 'Escape') { setRenaming(false); setRenameValue(doc.title) }
-                }}
-                onBlur={submitRename}
-              />
+              <div className="flex items-center gap-1 w-full">
+                <input
+                  autoFocus
+                  className="flex-1 min-w-0 text-sm font-medium text-gray-900 dark:text-white bg-transparent border border-indigo-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitRename()
+                    if (e.key === 'Escape') { setRenaming(false); setRenameValue(doc.title) }
+                  }}
+                />
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={submitRename}
+                  className="p-1 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-950 transition-colors"
+                  title="Save"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                  </svg>
+                </button>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => { setRenaming(false); setRenameValue(doc.title) }}
+                  className="p-1 rounded text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  title="Cancel"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             ) : (
               <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{doc.title}</p>
             )}

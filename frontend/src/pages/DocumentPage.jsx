@@ -285,17 +285,38 @@ export default function DocumentPage() {
           ) : (
             <div className="flex items-center gap-3 flex-wrap">
               {renaming ? (
-                <input
-                  autoFocus
-                  className="text-xl font-semibold text-gray-900 dark:text-white bg-transparent border-b-2 border-indigo-400 focus:outline-none focus:border-indigo-600 min-w-0 flex-1"
-                  value={renameValue}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') submitRename()
-                    if (e.key === 'Escape') setRenaming(false)
-                  }}
-                  onBlur={submitRename}
-                />
+                <>
+                  <input
+                    autoFocus
+                    className="text-xl font-semibold text-gray-900 dark:text-white bg-transparent border-b-2 border-indigo-400 focus:outline-none focus:border-indigo-600 min-w-0 flex-1"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitRename()
+                      if (e.key === 'Escape') setRenaming(false)
+                    }}
+                  />
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={submitRename}
+                    className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-950 transition-colors"
+                    title="Save"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  </button>
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setRenaming(false)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    title="Cancel"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </>
               ) : (
                 <h1
                   className="text-xl font-semibold text-gray-900 dark:text-white cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
