@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
+from google.api_core.exceptions import ResourceExhausted
 
 from app.models.requests import TextRequest
 from app.models.responses import SummaryResponse
@@ -43,6 +44,15 @@ async def summarize(request: Request, body: TextRequest) -> SummaryResponse:
         # No document_id — skip idempotency (e.g. direct API call without retry context)
         return generate_summary(body.text)
 
+    except ResourceExhausted as exc:
+        # Gemini free-tier quota exhausted (HTTP 429). Propagate as 429 so the
+        # worker can apply a long backoff (≥60 s) instead of the standard 1-2 s
+        # retry, preventing a quota-exhausting retry storm.
+        logger.warning("Gemini rate limit hit during summarization", extra={"error": str(exc)})
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Gemini rate limit exceeded. Retry after quota window resets (≥60 s).",
+        ) from exc
     except Exception as exc:
         logger.exception("Summarization failed", extra={"error": str(exc)})
         raise HTTPException(

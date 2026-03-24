@@ -190,6 +190,17 @@ def _get_llm() -> ChatGoogleGenerativeAI:
         model=settings.gemini_model,
         google_api_key=settings.google_api_key,
         temperature=_LLM_TEMPERATURE,
+        # Fail fast if Gemini does not respond within 90 s. Without this, a slow or
+        # unresponsive API call blocks the asyncio.to_thread worker thread indefinitely.
+        # DeadlineExceeded propagates as a 502 to the worker, which retries with 1-2 s backoff.
+        timeout=90,
+        # Disable LangChain's internal tenacity retry. Previously, a 429 caused LangChain
+        # to hold the thread for 30-120 s before surfacing the error — multiplied across
+        # 3 concurrent Mono.zip calls and 2 worker retries, this exhausted the daily RPD
+        # quota in one processing cycle (the retry storm of 2026-03-XX).
+        # The worker now owns all retry logic: 65 s backoff for RateLimitException,
+        # 1-2 s for transient failures. See RabbitMqConfig.documentProcessingRetry().
+        max_retries=0,
     )
 
 

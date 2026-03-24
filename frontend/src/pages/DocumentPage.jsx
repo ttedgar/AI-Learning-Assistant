@@ -243,6 +243,27 @@ export default function DocumentPage() {
               {doc?.status && <StatusBadge status={doc.status} />}
             </div>
           )}
+
+          {/* Failure reason banner — only shown when status is FAILED */}
+          {doc?.status === 'FAILED' && (
+            <div className="mt-3 flex items-start gap-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 px-4 py-3">
+              <svg className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-red-800 dark:text-red-300">
+                  {doc?.errorCode === 'RATE_LIMIT_EXCEEDED'
+                    ? 'AI rate limit exceeded'
+                    : 'Processing failed'}
+                </p>
+                <p className="mt-0.5 text-sm text-red-700 dark:text-red-400">
+                  {doc?.errorCode === 'RATE_LIMIT_EXCEEDED'
+                    ? 'The AI service hit its free-tier quota limit while processing this document. Please delete this document and re-upload it after a few minutes.'
+                    : 'The AI service encountered an error while processing this document. Please try re-uploading.'}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}

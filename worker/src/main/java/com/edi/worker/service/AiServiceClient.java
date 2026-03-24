@@ -1,5 +1,6 @@
 package com.edi.worker.service;
 
+import com.edi.worker.exception.RateLimitException;
 import com.edi.worker.messaging.DocumentProcessedMessage.FlashcardDto;
 import com.edi.worker.messaging.DocumentProcessedMessage.QuizQuestionDto;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -9,6 +10,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -50,6 +52,11 @@ public class AiServiceClient {
                     .header("X-Correlation-Id", correlationId)
                     .bodyValue(Map.of("text", text, "document_id", documentId))
                     .retrieve()
+                    // 429 from ai-service means Gemini quota is exhausted. Throw RateLimitException
+                    // so the retry strategy can apply a 65 s backoff instead of the standard 1-2 s.
+                    .onStatus(s -> s == HttpStatus.TOO_MANY_REQUESTS,
+                            response -> Mono.error(new RateLimitException(
+                                    "ai-service returned 429 (Gemini rate limit) for /ai/summarize")))
                     .bodyToMono(SummarizeResponse.class)
                     .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/summarize")))
                     .map(SummarizeResponse::getSummary)
@@ -68,6 +75,9 @@ public class AiServiceClient {
                     .header("X-Correlation-Id", correlationId)
                     .bodyValue(Map.of("text", text, "document_id", documentId))
                     .retrieve()
+                    .onStatus(s -> s == HttpStatus.TOO_MANY_REQUESTS,
+                            response -> Mono.error(new RateLimitException(
+                                    "ai-service returned 429 (Gemini rate limit) for /ai/flashcards")))
                     .bodyToMono(FlashcardsResponse.class)
                     .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/flashcards")))
                     .map(r -> r.getFlashcards().stream()
@@ -91,6 +101,9 @@ public class AiServiceClient {
                     .header("X-Correlation-Id", correlationId)
                     .bodyValue(Map.of("text", text, "document_id", documentId))
                     .retrieve()
+                    .onStatus(s -> s == HttpStatus.TOO_MANY_REQUESTS,
+                            response -> Mono.error(new RateLimitException(
+                                    "ai-service returned 429 (Gemini rate limit) for /ai/quiz")))
                     .bodyToMono(QuizResponse.class)
                     .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/quiz")))
                     .map(r -> r.getQuestions().stream()

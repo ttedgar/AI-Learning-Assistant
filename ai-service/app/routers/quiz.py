@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
+from google.api_core.exceptions import ResourceExhausted
 
 from app.models.requests import TextRequest
 from app.models.responses import QuizResponse
@@ -36,6 +37,12 @@ async def quiz(request: Request, body: TextRequest) -> QuizResponse:
 
         return generate_quiz(body.text)
 
+    except ResourceExhausted as exc:
+        logger.warning("Gemini rate limit hit during quiz generation", extra={"error": str(exc)})
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Gemini rate limit exceeded. Retry after quota window resets (≥60 s).",
+        ) from exc
     except Exception as exc:
         logger.exception("Quiz generation failed", extra={"error": str(exc)})
         raise HTTPException(

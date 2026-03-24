@@ -85,6 +85,14 @@ public class Document {
     @Column(name = "lease_until")
     private Instant leaseUntil;
 
+    /**
+     * Machine-readable failure code set when the document transitions to FAILED.
+     * Known values: {@code RATE_LIMIT_EXCEEDED} (Gemini quota), {@code AI_UNAVAILABLE} (other).
+     * Null for non-FAILED documents.
+     */
+    @Column(name = "error_code", length = 50)
+    private String errorCode;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private Instant createdAt;

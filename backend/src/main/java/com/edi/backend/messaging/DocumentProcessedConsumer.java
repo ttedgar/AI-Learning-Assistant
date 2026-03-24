@@ -143,6 +143,13 @@ public class DocumentProcessedConsumer {
                 saveResults(documentId, message);
             }
 
+            if (incomingStatus == DocumentStatus.FAILED && message.errorCode() != null) {
+                // Store the machine-readable error code so the frontend can display a specific message.
+                jdbcTemplate.update(
+                        "UPDATE documents SET error_code = ? WHERE id = ?",
+                        message.errorCode(), documentId);
+            }
+
         } finally {
             MDC.remove("correlationId");
             MDC.remove("documentId");

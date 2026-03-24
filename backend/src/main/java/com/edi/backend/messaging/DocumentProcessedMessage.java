@@ -17,6 +17,8 @@ public record DocumentProcessedMessage(
         String documentId,
         String status,
         String errorMessage,
+        /** Machine-readable failure code: {@code RATE_LIMIT_EXCEEDED} or {@code AI_UNAVAILABLE}. Null on success. */
+        String errorCode,
         String summary,
         List<FlashcardResult> flashcards,
         List<QuizResult> quiz) {

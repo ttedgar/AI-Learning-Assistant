@@ -12,6 +12,9 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import com.edi.worker.exception.RateLimitException;
+import reactor.core.Exceptions;
+import reactor.core.publisher.Mono;
 import reactor.rabbitmq.RabbitFlux;
 import reactor.rabbitmq.Receiver;
 import reactor.rabbitmq.ReceiverOptions;
@@ -169,18 +172,40 @@ public class RabbitMqConfig {
     }
 
     /**
-     * Retry specification: 3 total attempts (2 retries), exponential back-off 1 s → 2 s → 4 s cap.
+     * Retry specification: 3 total attempts (1 initial + 2 retries).
      *
-     * <p>Extracted as a bean so integration and unit tests can inject a no-backoff
-     * {@code Retry.max(2)} variant to avoid slow test suites.
+     * <p>Backoff is exception-type-aware:
+     * <ul>
+     *   <li>{@link RateLimitException} (Gemini 429): 65 s fixed delay. The Gemini free-tier
+     *       RPM quota window resets every 60 s; 65 s gives a 5-second buffer. Without this,
+     *       fast retries after a 429 exhaust the daily RPD quota in minutes (the retry storm
+     *       pattern observed in production on 2026-03-XX).</li>
+     *   <li>All other failures: exponential back-off 1 s → 2 s (infrastructure errors,
+     *       transient network issues, ai-service 502s).</li>
+     * </ul>
      *
-     * <p>Production note: stateful retry ({@code Retry.backoff(...).transientErrors(true)})
-     * would survive worker restarts. Stateless suffices here — the processing window
-     * is short relative to the retry budget.
+     * <p>Extracted as a bean so integration and unit tests can inject {@code Retry.max(2)}
+     * without backoff to avoid slow test suites.
+     *
+     * <p>Production note: with a paid Gemini tier the Retry-After header value should be
+     * respected instead of a fixed 65 s delay. Stateful retry
+     * ({@code Retry.backoff(...).transientErrors(true)}) would survive worker restarts.
      */
     @Bean
     public Retry documentProcessingRetry() {
-        return Retry.backoff(2, Duration.ofSeconds(1))
-                .maxBackoff(Duration.ofSeconds(4));
+        return Retry.from(companion -> companion.flatMap(signal -> {
+            if (signal.totalRetries() >= 2) {
+                // Retries exhausted — propagate to onErrorResume in the consumer.
+                return Mono.error(Exceptions.retryExhausted(
+                        "Processing exhausted after " + (signal.totalRetries() + 1) + " attempts",
+                        signal.failure()));
+            }
+            boolean isRateLimit = signal.failure() instanceof RateLimitException;
+            // 1 s on first retry, 2 s on second retry; or 65 s flat for rate-limit errors.
+            Duration delay = isRateLimit
+                    ? Duration.ofSeconds(65)
+                    : Duration.ofSeconds(1L << signal.totalRetries());
+            return Mono.delay(delay);
+        }));
     }
 }

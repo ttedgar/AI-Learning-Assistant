@@ -29,6 +29,13 @@ public class DocumentProcessedMessage {
     /** Null on success; populated with the root cause message on failure. */
     private String errorMessage;
 
+    /**
+     * Machine-readable failure code; null on success.
+     * Known values: {@code RATE_LIMIT_EXCEEDED} (Gemini 429), {@code AI_UNAVAILABLE} (other AI errors).
+     * The backend stores this in the documents table so the frontend can display a specific message.
+     */
+    private String errorCode;
+
     private String summary;
     private List<FlashcardDto> flashcards;
     private List<QuizQuestionDto> quiz;

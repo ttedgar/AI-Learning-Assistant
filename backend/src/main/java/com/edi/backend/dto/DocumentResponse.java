@@ -16,6 +16,8 @@ public record DocumentResponse(
         String title,
         String fileUrl,
         DocumentStatus status,
+        /** Null unless status is FAILED. Values: {@code RATE_LIMIT_EXCEEDED}, {@code AI_UNAVAILABLE}. */
+        String errorCode,
         Instant createdAt) {
 
     public static DocumentResponse from(Document document) {
@@ -24,6 +26,7 @@ public record DocumentResponse(
                 document.getTitle(),
                 document.getFileUrl(),
                 document.getStatus(),
+                document.getErrorCode(),
                 document.getCreatedAt());
     }
 }

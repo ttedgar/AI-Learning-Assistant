@@ -1,6 +1,7 @@
 package com.edi.worker.consumer;
 
 import com.edi.worker.config.RabbitMqConfig;
+import com.edi.worker.exception.RateLimitException;
 import com.edi.worker.messaging.DocumentProcessedMessage;
 import com.edi.worker.messaging.DocumentProcessingMessage;
 import com.edi.worker.messaging.DocumentStatusMessage;
@@ -218,8 +219,10 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
     private Mono<Void> publishFailedResult(DocumentProcessingMessage message, Throwable cause) {
         // retryWhen wraps the last failure in RetryExhaustedException — unwrap to get root cause
         Throwable root = cause.getCause() != null ? cause.getCause() : cause;
-        log.error("All retries exhausted for documentId={}, publishing FAILED result. Cause: {}",
-                message.getDocumentId(), root.getMessage());
+        boolean isRateLimit = root instanceof RateLimitException;
+        String errorCode = isRateLimit ? "RATE_LIMIT_EXCEEDED" : "AI_UNAVAILABLE";
+        log.error("All retries exhausted for documentId={}, publishing FAILED result (errorCode={}). Cause: {}",
+                message.getDocumentId(), errorCode, root.getMessage());
 
         return sendWithConfirm(
                         RabbitMqConfig.DOCUMENT_EXCHANGE,
@@ -229,6 +232,7 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                                 .documentId(message.getDocumentId())
                                 .status("FAILED")
                                 .errorMessage(root.getMessage())
+                                .errorCode(errorCode)
                                 .build(),
                         "FAILED result",
                         message.getDocumentId())

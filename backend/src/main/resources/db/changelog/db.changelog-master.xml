@@ -13,5 +13,6 @@
     -->
     <include file="db/changelog/001-initial-schema.sql"/>
     <include file="db/changelog/002-state-machine-columns.sql"/>
+    <include file="db/changelog/003-add-error-code.sql"/>
 
 </databaseChangeLog>
