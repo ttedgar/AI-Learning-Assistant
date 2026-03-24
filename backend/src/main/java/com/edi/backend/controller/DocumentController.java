@@ -1,6 +1,7 @@
 package com.edi.backend.controller;
 
 import com.edi.backend.dto.DocumentResponse;
+import com.edi.backend.dto.RenameDocumentRequest;
 import com.edi.backend.security.AuthenticatedUser;
 import com.edi.backend.service.DocumentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -68,6 +69,18 @@ public class DocumentController {
             @AuthenticationPrincipal AuthenticatedUser principal) {
 
         var document = documentService.getByIdForUser(id, principal.supabaseUserId());
+        return ResponseEntity.ok(DocumentResponse.from(document));
+    }
+
+    @PatchMapping("/{id}")
+    @Operation(summary = "Rename a document",
+               description = "Updates the document title. File, status, and AI results are unchanged.")
+    public ResponseEntity<DocumentResponse> renameDocument(
+            @PathVariable UUID id,
+            @RequestBody RenameDocumentRequest request,
+            @AuthenticationPrincipal AuthenticatedUser principal) {
+
+        var document = documentService.rename(id, principal.supabaseUserId(), request.title());
         return ResponseEntity.ok(DocumentResponse.from(document));
     }
 

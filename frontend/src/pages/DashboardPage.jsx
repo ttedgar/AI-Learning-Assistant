@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/axios'
 import AppLayout from '../components/AppLayout'
 import StatusBadge from '../components/StatusBadge'
@@ -50,6 +51,34 @@ function EmptyState() {
 }
 
 function DocumentCard({ doc }) {
+  const queryClient = useQueryClient()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState(doc.title)
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/api/v1/documents/${doc.id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
+  })
+
+  const renameMutation = useMutation({
+    mutationFn: (title) => api.patch(`/api/v1/documents/${doc.id}`, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      setRenaming(false)
+    },
+  })
+
+  function submitRename() {
+    const trimmed = renameValue.trim()
+    if (!trimmed || trimmed === doc.title) {
+      setRenaming(false)
+      setRenameValue(doc.title)
+      return
+    }
+    renameMutation.mutate(trimmed)
+  }
+
   const createdAt = new Date(doc.createdAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -58,37 +87,97 @@ function DocumentCard({ doc }) {
 
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-shadow">
+      {/* Card header */}
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3 min-w-0">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
           <div className="h-9 w-9 flex-shrink-0 rounded-lg bg-red-50 dark:bg-red-950 flex items-center justify-center">
             <svg className="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
             </svg>
           </div>
-          <div className="min-w-0">
-            <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{doc.title}</p>
+          <div className="min-w-0 flex-1">
+            {renaming ? (
+              <input
+                autoFocus
+                className="w-full text-sm font-medium text-gray-900 dark:text-white bg-transparent border border-indigo-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitRename()
+                  if (e.key === 'Escape') { setRenaming(false); setRenameValue(doc.title) }
+                }}
+                onBlur={submitRename}
+              />
+            ) : (
+              <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{doc.title}</p>
+            )}
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{createdAt}</p>
           </div>
         </div>
         <StatusBadge status={doc.status} />
       </div>
 
-      {doc.status === 'DONE' && (
-        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex gap-2">
-          <Link
-            to={`/documents/${doc.id}`}
-            className="flex-1 text-center text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 dark:hover:bg-indigo-900 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            View results
-          </Link>
-        </div>
-      )}
+      {/* Card footer — actions */}
+      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+        {confirmDelete ? (
+          /* Inline delete confirmation — no modal needed for a single destructive action */
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600 dark:text-gray-400 flex-1">Delete this document?</span>
+            <button
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="text-xs font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            {doc.status === 'DONE' && (
+              <Link
+                to={`/documents/${doc.id}`}
+                className="flex-1 text-center text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 dark:hover:bg-indigo-900 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                View results
+              </Link>
+            )}
+            {doc.status === 'FAILED' && (
+              <p className="text-xs text-red-500 flex-1">Processing failed. Please try re-uploading.</p>
+            )}
+            {(doc.status === 'PENDING' || doc.status === 'IN_PROGRESS') && (
+              <span className="flex-1" />
+            )}
 
-      {doc.status === 'FAILED' && (
-        <p className="mt-3 text-xs text-red-500">
-          Processing failed. Please try uploading again.
-        </p>
-      )}
+            {/* Rename */}
+            <button
+              onClick={() => { setRenaming(true); setRenameValue(doc.title) }}
+              title="Rename"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+              </svg>
+            </button>
+
+            {/* Delete */}
+            <button
+              onClick={() => setConfirmDelete(true)}
+              title="Delete"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQueries } from '@tanstack/react-query'
+import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import api from '../lib/axios'
 import AppLayout from '../components/AppLayout'
@@ -235,11 +235,29 @@ function OriginalTab({ fileUrl, isLoading }) {
 
 export default function DocumentPage() {
   const { id } = useParams()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('Summary')
+  const [renaming, setRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
 
   const [documentQuery, summaryQuery, flashcardsQuery, quizQuery] = useDocumentData(id)
 
   const doc = documentQuery.data
+
+  const renameMutation = useMutation({
+    mutationFn: (title) => api.patch(`/api/v1/documents/${id}`, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['document', id] })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      setRenaming(false)
+    },
+  })
+
+  function submitRename() {
+    const trimmed = renameValue.trim()
+    if (!trimmed || trimmed === doc?.title) { setRenaming(false); return }
+    renameMutation.mutate(trimmed)
+  }
 
   return (
     <AppLayout>
@@ -266,7 +284,27 @@ export default function DocumentPage() {
             <p className="text-sm text-red-500">Failed to load document.</p>
           ) : (
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{doc?.title}</h1>
+              {renaming ? (
+                <input
+                  autoFocus
+                  className="text-xl font-semibold text-gray-900 dark:text-white bg-transparent border-b-2 border-indigo-400 focus:outline-none focus:border-indigo-600 min-w-0 flex-1"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitRename()
+                    if (e.key === 'Escape') setRenaming(false)
+                  }}
+                  onBlur={submitRename}
+                />
+              ) : (
+                <h1
+                  className="text-xl font-semibold text-gray-900 dark:text-white cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  title="Click to rename"
+                  onClick={() => { setRenameValue(doc?.title ?? ''); setRenaming(true) }}
+                >
+                  {doc?.title}
+                </h1>
+              )}
               {doc?.status && <StatusBadge status={doc.status} />}
             </div>
           )}

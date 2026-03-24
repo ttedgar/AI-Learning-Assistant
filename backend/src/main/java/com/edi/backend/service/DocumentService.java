@@ -1,7 +1,6 @@
 package com.edi.backend.service;
 
 import com.edi.backend.entity.Document;
-import com.edi.backend.entity.DocumentStatus;
 import com.edi.backend.entity.User;
 import com.edi.backend.exception.DocumentNotFoundException;
 import com.edi.backend.messaging.DocumentProcessingMessage;
@@ -112,6 +111,25 @@ public class DocumentService {
         User user = resolveUser(supabaseUserId);
         return documentRepository.findByIdAndUser(documentId, user)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
+    }
+
+    /**
+     * Renames a document.
+     *
+     * @throws DocumentNotFoundException    if the document doesn't exist or belongs to another user
+     * @throws IllegalArgumentException     if the new title is blank
+     */
+    @Transactional
+    public Document rename(UUID documentId, String supabaseUserId, String newTitle) {
+        if (newTitle == null || newTitle.isBlank()) {
+            throw new IllegalArgumentException("Title must not be blank");
+        }
+        User user = resolveUser(supabaseUserId);
+        Document document = documentRepository.findByIdAndUser(documentId, user)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+        document.setTitle(newTitle.strip());
+        log.info("Document renamed: documentId={}", documentId);
+        return documentRepository.save(document);
     }
 
     /**
