@@ -19,8 +19,12 @@ public record DocumentProcessedMessage(
         String errorMessage,
         /** Machine-readable failure code: {@code RATE_LIMIT_EXCEEDED} or {@code AI_UNAVAILABLE}. Null on success. */
         String errorCode,
-        /** AI model that generated the content (e.g. {@code meta-llama/llama-3.1-8b-instruct:free}). Null on failure. */
-        String aiModel,
+        /** Model that generated the summary. Null on failure. */
+        String summaryModel,
+        /** Model that generated the flashcards. Null on failure. */
+        String flashcardsModel,
+        /** Model that generated the quiz. Null on failure. */
+        String quizModel,
         String summary,
         List<FlashcardResult> flashcards,
         List<QuizResult> quiz) {

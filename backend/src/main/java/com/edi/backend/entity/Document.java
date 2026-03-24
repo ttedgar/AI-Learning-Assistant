@@ -93,12 +93,17 @@ public class Document {
     @Column(name = "error_code", length = 50)
     private String errorCode;
 
-    /**
-     * The AI model that generated this document's content (e.g. {@code meta-llama/llama-3.1-8b-instruct:free}).
-     * Set when the document transitions to DONE. Null for failed or pending documents.
-     */
-    @Column(name = "ai_model", length = 100)
-    private String aiModel;
+    /** Model that generated the summary. Set on DONE; null otherwise. */
+    @Column(name = "summary_model", length = 100)
+    private String summaryModel;
+
+    /** Model that generated the flashcards. Set on DONE; null otherwise. */
+    @Column(name = "flashcards_model", length = 100)
+    private String flashcardsModel;
+
+    /** Model that generated the quiz. Set on DONE; null otherwise. */
+    @Column(name = "quiz_model", length = 100)
+    private String quizModel;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)

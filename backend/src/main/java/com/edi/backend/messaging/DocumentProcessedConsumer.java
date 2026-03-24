@@ -141,11 +141,9 @@ public class DocumentProcessedConsumer {
 
             if (incomingStatus == DocumentStatus.DONE) {
                 saveResults(documentId, message);
-                if (message.aiModel() != null) {
-                    jdbcTemplate.update(
-                            "UPDATE documents SET ai_model = ? WHERE id = ?",
-                            message.aiModel(), documentId);
-                }
+                jdbcTemplate.update(
+                        "UPDATE documents SET summary_model = ?, flashcards_model = ?, quiz_model = ? WHERE id = ?",
+                        message.summaryModel(), message.flashcardsModel(), message.quizModel(), documentId);
             }
 
             if (incomingStatus == DocumentStatus.FAILED && message.errorCode() != null) {

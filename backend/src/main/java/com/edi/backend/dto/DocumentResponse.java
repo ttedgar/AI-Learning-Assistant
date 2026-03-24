@@ -18,8 +18,12 @@ public record DocumentResponse(
         DocumentStatus status,
         /** Null unless status is FAILED. Values: {@code RATE_LIMIT_EXCEEDED}, {@code AI_UNAVAILABLE}. */
         String errorCode,
-        /** AI model that generated the content. Null unless status is DONE. */
-        String aiModel,
+        /** Model that generated the summary. Null unless status is DONE. */
+        String summaryModel,
+        /** Model that generated the flashcards. Null unless status is DONE. */
+        String flashcardsModel,
+        /** Model that generated the quiz. Null unless status is DONE. */
+        String quizModel,
         Instant createdAt) {
 
     public static DocumentResponse from(Document document) {
@@ -29,7 +33,9 @@ public record DocumentResponse(
                 document.getFileUrl(),
                 document.getStatus(),
                 document.getErrorCode(),
-                document.getAiModel(),
+                document.getSummaryModel(),
+                document.getFlashcardsModel(),
+                document.getQuizModel(),
                 document.getCreatedAt());
     }
 }

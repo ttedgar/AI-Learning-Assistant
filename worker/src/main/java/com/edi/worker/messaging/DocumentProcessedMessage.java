@@ -36,8 +36,12 @@ public class DocumentProcessedMessage {
      */
     private String errorCode;
 
-    /** The AI model that generated the summary (e.g. {@code meta-llama/llama-3.1-8b-instruct:free}). Null on failure. */
-    private String aiModel;
+    /** Model that generated the summary. Null on failure. */
+    private String summaryModel;
+    /** Model that generated the flashcards. Null on failure. */
+    private String flashcardsModel;
+    /** Model that generated the quiz. Null on failure. */
+    private String quizModel;
 
     private String summary;
     private List<FlashcardDto> flashcards;

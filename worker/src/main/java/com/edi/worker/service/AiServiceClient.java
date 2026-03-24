@@ -66,17 +66,28 @@ public class AiServiceClient {
         });
     }
 
-    /**
-     * Summary text and the model that generated it, as returned by ai-service.
-     * The model name is surfaced in the UI so users can see which free AI model processed their document.
-     */
+    /** Summary text + the model that generated it. */
     @lombok.Value
     public static class SummarizeResult {
         String summary;
         String modelUsed;
     }
 
-    public Mono<List<FlashcardDto>> generateFlashcards(String text, String documentId, String correlationId) {
+    /** Flashcards list + the model that generated them. */
+    @lombok.Value
+    public static class FlashcardsResult {
+        List<FlashcardDto> flashcards;
+        String modelUsed;
+    }
+
+    /** Quiz questions list + the model that generated them. */
+    @lombok.Value
+    public static class QuizResult {
+        List<QuizQuestionDto> questions;
+        String modelUsed;
+    }
+
+    public Mono<FlashcardsResult> generateFlashcards(String text, String documentId, String correlationId) {
         log.info("Calling ai-service /ai/flashcards");
         return Mono.defer(() -> {
             Timer.Sample sample = Timer.start(meterRegistry);
@@ -87,22 +98,24 @@ public class AiServiceClient {
                     .retrieve()
                     .onStatus(s -> s == HttpStatus.TOO_MANY_REQUESTS,
                             response -> Mono.error(new RateLimitException(
-                                    "ai-service returned 429 (Gemini rate limit) for /ai/flashcards")))
+                                    "ai-service returned 429 (rate limit) for /ai/flashcards")))
                     .bodyToMono(FlashcardsResponse.class)
                     .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/flashcards")))
-                    .map(r -> r.getFlashcards().stream()
-                            .map(f -> FlashcardDto.builder()
-                                    .question(f.getQuestion())
-                                    .answer(f.getAnswer())
-                                    .build())
-                            .toList())
+                    .map(r -> new FlashcardsResult(
+                            r.getFlashcards().stream()
+                                    .map(f -> FlashcardDto.builder()
+                                            .question(f.getQuestion())
+                                            .answer(f.getAnswer())
+                                            .build())
+                                    .toList(),
+                            r.getModelUsed()))
                     .doFinally(signal -> sample.stop(
                             Timer.builder("ai.call.latency").tag("operation", "flashcards")
                                     .register(meterRegistry)));
         });
     }
 
-    public Mono<List<QuizQuestionDto>> generateQuiz(String text, String documentId, String correlationId) {
+    public Mono<QuizResult> generateQuiz(String text, String documentId, String correlationId) {
         log.info("Calling ai-service /ai/quiz");
         return Mono.defer(() -> {
             Timer.Sample sample = Timer.start(meterRegistry);
@@ -113,17 +126,19 @@ public class AiServiceClient {
                     .retrieve()
                     .onStatus(s -> s == HttpStatus.TOO_MANY_REQUESTS,
                             response -> Mono.error(new RateLimitException(
-                                    "ai-service returned 429 (Gemini rate limit) for /ai/quiz")))
+                                    "ai-service returned 429 (rate limit) for /ai/quiz")))
                     .bodyToMono(QuizResponse.class)
                     .switchIfEmpty(Mono.error(new IllegalStateException("Empty response from /ai/quiz")))
-                    .map(r -> r.getQuestions().stream()
-                            .map(q -> QuizQuestionDto.builder()
-                                    .question(q.getQuestion())
-                                    .type(q.getType())
-                                    .correctAnswer(q.getCorrectAnswer())
-                                    .options(q.getOptions())
-                                    .build())
-                            .toList())
+                    .map(r -> new QuizResult(
+                            r.getQuestions().stream()
+                                    .map(q -> QuizQuestionDto.builder()
+                                            .question(q.getQuestion())
+                                            .type(q.getType())
+                                            .correctAnswer(q.getCorrectAnswer())
+                                            .options(q.getOptions())
+                                            .build())
+                                    .toList(),
+                            r.getModelUsed()))
                     .doFinally(signal -> sample.stop(
                             Timer.builder("ai.call.latency").tag("operation", "quiz")
                                     .register(meterRegistry)));
@@ -142,6 +157,8 @@ public class AiServiceClient {
     @Data
     static class FlashcardsResponse {
         private List<AiFlashcard> flashcards;
+        @com.fasterxml.jackson.annotation.JsonProperty("model_used")
+        private String modelUsed;
     }
 
     @Data
@@ -153,6 +170,8 @@ public class AiServiceClient {
     @Data
     static class QuizResponse {
         private List<AiQuizQuestion> questions;
+        @com.fasterxml.jackson.annotation.JsonProperty("model_used")
+        private String modelUsed;
     }
 
     @Data

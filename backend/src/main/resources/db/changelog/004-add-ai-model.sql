@@ -1,9 +1,13 @@
 --liquibase formatted sql
 
--- changeset edi:006-add-ai-model
--- comment: Adds ai_model column to documents to store which AI model generated the content.
---          Populated when a document transitions to DONE. Null for PENDING/IN_PROGRESS/FAILED documents.
---          Useful for debugging and transparency — OpenRouter free tier routes to random models.
---          Example values: meta-llama/llama-3.1-8b-instruct:free, google/gemma-3-27b-it:free
-ALTER TABLE documents ADD COLUMN ai_model VARCHAR(100);
--- rollback ALTER TABLE documents DROP COLUMN IF EXISTS ai_model;
+-- changeset edi:006-add-ai-model-columns
+-- comment: Adds per-content-type AI model columns to documents so the frontend can show which
+--          free model generated each piece of content (summary, flashcards, quiz separately).
+--          OpenRouter free tier routes to random models per call, so each type may differ.
+--          All nullable — only set when the document transitions to DONE.
+ALTER TABLE documents ADD COLUMN summary_model VARCHAR(100);
+ALTER TABLE documents ADD COLUMN flashcards_model VARCHAR(100);
+ALTER TABLE documents ADD COLUMN quiz_model VARCHAR(100);
+-- rollback ALTER TABLE documents DROP COLUMN IF EXISTS summary_model;
+-- rollback ALTER TABLE documents DROP COLUMN IF EXISTS flashcards_model;
+-- rollback ALTER TABLE documents DROP COLUMN IF EXISTS quiz_model;

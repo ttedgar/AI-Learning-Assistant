@@ -7,6 +7,8 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import com.edi.worker.messaging.DocumentProcessingMessage;
 import com.edi.worker.messaging.DocumentStatusMessage;
 import com.edi.worker.service.AiServiceClient;
+import com.edi.worker.service.AiServiceClient.FlashcardsResult;
+import com.edi.worker.service.AiServiceClient.QuizResult;
 import com.edi.worker.service.AiServiceClient.SummarizeResult;
 import com.edi.worker.service.PdfDownloader;
 import com.edi.worker.service.PdfTextExtractor;
@@ -188,15 +190,19 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                                 aiServiceClient.generateFlashcards(text, message.getDocumentId(), message.getCorrelationId()),
                                 aiServiceClient.generateQuiz(text, message.getDocumentId(), message.getCorrelationId()))
                         .map(tuple -> {
-                            SummarizeResult summarizeResult = tuple.getT1();
+                            SummarizeResult  summarizeResult  = tuple.getT1();
+                            FlashcardsResult flashcardsResult = tuple.getT2();
+                            QuizResult       quizResult       = tuple.getT3();
                             return DocumentProcessedMessage.builder()
                                     .correlationId(message.getCorrelationId())
                                     .documentId(message.getDocumentId())
                                     .status("DONE")
-                                    .aiModel(summarizeResult.getModelUsed())
+                                    .summaryModel(summarizeResult.getModelUsed())
+                                    .flashcardsModel(flashcardsResult.getModelUsed())
+                                    .quizModel(quizResult.getModelUsed())
                                     .summary(summarizeResult.getSummary())
-                                    .flashcards(tuple.getT2())
-                                    .quiz(tuple.getT3())
+                                    .flashcards(flashcardsResult.getFlashcards())
+                                    .quiz(quizResult.getQuestions())
                                     .build();
                         }))
 
