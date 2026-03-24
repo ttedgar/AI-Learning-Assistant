@@ -34,7 +34,8 @@ import time
 from typing import Any, Optional
 
 from langchain.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.runnables import Runnable
+from langchain_openai import ChatOpenAI
 from langfuse import Langfuse
 from langfuse.langchain import CallbackHandler
 
@@ -183,25 +184,47 @@ _QUIZ_PROMPT = PromptTemplate(
 # LLM helpers
 # ---------------------------------------------------------------------------
 
-def _get_llm() -> ChatGoogleGenerativeAI:
-    """Construct the LangChain LLM wrapper for Gemini."""
-    settings = get_settings()
-    return ChatGoogleGenerativeAI(
-        model=settings.gemini_model,
-        google_api_key=settings.google_api_key,
+_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+_OPENROUTER_HEADERS  = {
+    # Optional but recommended by OpenRouter — identifies the app on their leaderboard.
+    "HTTP-Referer": "https://github.com/edi/ai-learning-assistant",
+    "X-Title": "AI Learning Assistant",
+}
+
+
+def _make_chat_model(model: str, api_key: str) -> ChatOpenAI:
+    return ChatOpenAI(
+        model=model,
+        openai_api_key=api_key,
+        openai_api_base=_OPENROUTER_BASE_URL,
+        default_headers=_OPENROUTER_HEADERS,
         temperature=_LLM_TEMPERATURE,
-        # Fail fast if Gemini does not respond within 90 s. Without this, a slow or
-        # unresponsive API call blocks the asyncio.to_thread worker thread indefinitely.
-        # DeadlineExceeded propagates as a 502 to the worker, which retries with 1-2 s backoff.
+        # Fail fast — prevents asyncio.to_thread from blocking indefinitely.
+        # Worker retries with 1-2 s backoff on timeout (502 path).
         timeout=90,
-        # Disable LangChain's internal tenacity retry. Previously, a 429 caused LangChain
-        # to hold the thread for 30-120 s before surfacing the error — multiplied across
-        # 3 concurrent Mono.zip calls and 2 worker retries, this exhausted the daily RPD
-        # quota in one processing cycle (the retry storm of 2026-03-XX).
-        # The worker now owns all retry logic: 65 s backoff for RateLimitException,
-        # 1-2 s for transient failures. See RabbitMqConfig.documentProcessingRetry().
+        # Worker owns all retry logic via RabbitMqConfig.documentProcessingRetry().
+        # LangChain internal retries are disabled to prevent silent quota storms.
         max_retries=0,
     )
+
+
+def _get_llm() -> Runnable:
+    """
+    Returns a LangChain Runnable that calls the primary model (Llama 3.1 8B via
+    OpenRouter) and automatically falls back to ``openrouter/free`` on any failure.
+
+    ``openrouter/free`` routes to a random available free model, acting as a
+    catch-all when the primary is rate-limited or unavailable.
+
+    Production note: swap PRIMARY_MODEL for a paid model (e.g. llama-3.1-70b)
+    via the OPENROUTER env var — no code changes required.
+    """
+    settings = get_settings()
+    primary  = _make_chat_model(settings.primary_model,  settings.openrouter_api_key)
+    fallback = _make_chat_model(settings.fallback_model, settings.openrouter_api_key)
+    # with_fallbacks() catches any exception from primary and retries with fallback.
+    # If fallback also fails, the exception propagates to the router's HTTP 502 handler.
+    return primary.with_fallbacks([fallback])
 
 
 def _invoke_llm(
@@ -229,7 +252,7 @@ def _invoke_llm(
             "metadata": {
                 "langfuse_trace_name": operation,
                 "langfuse_tags": [operation],
-                "model": settings.gemini_model,
+                "model": settings.primary_model,
                 "temperature": _LLM_TEMPERATURE,
             },
         },

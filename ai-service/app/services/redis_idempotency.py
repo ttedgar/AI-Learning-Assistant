@@ -121,7 +121,19 @@ class RedisIdempotencyService:
                 extra={"operation": operation, "document_id": document_id},
             )
             AI_CACHE_MISS.labels(operation=operation).inc()
-            result_obj: BaseModel = await asyncio.to_thread(compute)
+            try:
+                result_obj: BaseModel = await asyncio.to_thread(compute)
+            except Exception:
+                # Release the claim so the next Worker retry can proceed immediately
+                # instead of hitting contention, polling 30 s for a result that will
+                # never appear, and spawning a fallback that also fails.
+                # Without this, each failed attempt leaves a dangling claim key for
+                # CLAIM_TTL_SECONDS (5 min), causing exponential fallback pile-up.
+                try:
+                    await self._redis.delete(claim_key)
+                except aioredis.RedisError:
+                    pass  # best-effort; key expires on its own
+                raise
 
             # ── Cache the result ──────────────────────────────────────────────
             await self._redis.set(

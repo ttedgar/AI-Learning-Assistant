@@ -18,12 +18,17 @@ class Settings(BaseSettings):
     # Security
     internal_api_key: str = "change-me-in-production"
 
-    # Gemini
-    google_api_key: str = ""
-    gemini_model: str = "gemini-3.1-flash-lite-preview"
+    # OpenRouter — unified API for free LLM models.
+    # primary_model is tried first; on any failure LangChain's with_fallbacks()
+    # automatically retries with fallback_model (openrouter/free routes to any
+    # available free model, acting as a last-resort catch-all).
+    # Production: swap for a paid model (e.g. meta-llama/llama-3.1-70b-instruct)
+    # by changing these env vars — no code changes required.
+    openrouter_api_key: str = ""
+    primary_model: str = "meta-llama/llama-3.1-8b-instruct:free"
+    fallback_model: str = "openrouter/free"
 
-    # Long-document thresholds
-    # Gemini models have a 1M-token context window (~4 chars/token).
+    # Long-document thresholds (model-agnostic).
     # 60,000 chars ≈ 15,000 tokens — covers ~25-page academic papers in a single
     # call. Only truly large documents (100+ pages) trigger map-reduce.
     # Production: tune per model; parallelise the map step with asyncio.gather.
@@ -31,9 +36,9 @@ class Settings(BaseSettings):
     chunk_size: int = 50_000
     chunk_overlap: int = 500
 
-    # Rate-limit-aware delay between consecutive Gemini calls in the map step.
-    # Free-tier gemini-3.1-flash-lite-preview: 15 RPM — small delay is sufficient.
-    # Set to 0 in production where paid quotas remove this constraint.
+    # Delay between consecutive LLM calls in the map-reduce step.
+    # Free-tier models typically allow 20 RPM; a small delay avoids bursting.
+    # Set to 0 if using a paid tier.
     chunk_call_delay_s: float = 5.0
 
     # Langfuse observability (optional — service starts without it)

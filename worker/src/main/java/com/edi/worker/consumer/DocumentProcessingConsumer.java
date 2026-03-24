@@ -3,6 +3,7 @@ package com.edi.worker.consumer;
 import com.edi.worker.config.RabbitMqConfig;
 import com.edi.worker.exception.RateLimitException;
 import com.edi.worker.messaging.DocumentProcessedMessage;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import com.edi.worker.messaging.DocumentProcessingMessage;
 import com.edi.worker.messaging.DocumentStatusMessage;
 import com.edi.worker.service.AiServiceClient;
@@ -202,8 +203,10 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
                         message.getDocumentId()))
 
                 .doOnError(e -> {
-                    log.warn("Processing failed for documentId={}, will retry if attempts remain: {}",
-                            message.getDocumentId(), e.getMessage());
+                    String body = (e instanceof WebClientResponseException wcre)
+                            ? " | body: " + wcre.getResponseBodyAsString() : "";
+                    log.warn("Processing failed for documentId={}, will retry if attempts remain: {}{}",
+                            message.getDocumentId(), e.getMessage(), body);
                     meterRegistry.counter("document.retry.count", "reason", "processing_failure").increment();
                 })
                 .retryWhen(documentProcessingRetry)
@@ -221,8 +224,13 @@ public class DocumentProcessingConsumer implements ApplicationRunner {
         Throwable root = cause.getCause() != null ? cause.getCause() : cause;
         boolean isRateLimit = root instanceof RateLimitException;
         String errorCode = isRateLimit ? "RATE_LIMIT_EXCEEDED" : "AI_UNAVAILABLE";
-        log.error("All retries exhausted for documentId={}, publishing FAILED result (errorCode={}). Cause: {}",
-                message.getDocumentId(), errorCode, root.getMessage());
+        // Include the ai-service response body when available — WebClientResponseException
+        // getMessage() only contains status + URL; the actual Python exception is in the body.
+        String detail = (root instanceof WebClientResponseException wcre)
+                ? " | body: " + wcre.getResponseBodyAsString()
+                : "";
+        log.error("All retries exhausted for documentId={}, publishing FAILED result (errorCode={}). Cause: {}{}",
+                message.getDocumentId(), errorCode, root.getMessage(), detail);
 
         return sendWithConfirm(
                         RabbitMqConfig.DOCUMENT_EXCHANGE,
