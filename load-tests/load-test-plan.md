@@ -178,37 +178,18 @@ The cleanup script (Part 9) handles all of this automatically.
 
 ## Part 2: One-Time Code Changes
 
-These changes must be made to the existing codebase before the load test stack
-can be built. They are small and do not affect production behaviour.
+**All code changes are already in place.** Nothing needs to be added before
+building the load test stack. Verified:
 
-### 2a. Add Micrometer Prometheus registry to worker
+- `io.micrometer:micrometer-registry-prometheus` — present in both `worker/build.gradle`
+  and `backend/build.gradle` ✅
+- `management.endpoints.web.exposure.include: health, info, prometheus` — present in
+  both `worker/src/main/resources/application.yml` and `backend/src/main/resources/application.yml` ✅
+- `WORKER_CONSUMER_QOS` and `WORKER_CONSUMER_FLATMAP_CONCURRENCY` env var bindings —
+  already configured in `worker/src/main/resources/application.yml` ✅
 
-Add to `worker/pom.xml` in the `<dependencies>` section:
-
-```xml
-<!-- Exposes /actuator/prometheus for Prometheus scraping.
-     Production: this endpoint should be secured or only reachable internally. -->
-<dependency>
-    <groupId>io.micrometer</groupId>
-    <artifactId>micrometer-registry-prometheus</artifactId>
-</dependency>
-```
-
-### 2b. Add Micrometer Prometheus registry to backend
-
-Add the same dependency to `backend/pom.xml`.
-
-### 2c. Expose worker actuator endpoint
-
-The worker has no `application.properties` entry for actuator web exposure. Add to
-`worker/src/main/resources/application.properties` (or `application.yml`):
-
-```properties
-management.endpoints.web.exposure.include=health,prometheus,metrics
-management.endpoint.prometheus.enabled=true
-```
-
-The backend likely already has this — verify and add if missing.
+The only remaining change is the RabbitMQ Prometheus plugin file (2d below),
+which is a new file in `load-tests/` — not a change to existing code.
 
 ### 2d. Enable RabbitMQ Prometheus plugin
 
@@ -404,12 +385,14 @@ services:
   # Worker: expose actuator port so Prometheus can scrape it from host
   # (Prometheus is in the same Docker network so no host exposure is
   # strictly needed, but useful for manual inspection during the test)
+  # Note: worker runs on port 8081 (server.port default in application.yml),
+  # not 8080. Backend uses 8080; worker uses 8081.
   worker:
     environment:
       WORKER_CONSUMER_QOS:                 ${WORKER_CONSUMER_QOS:-2}
       WORKER_CONSUMER_FLATMAP_CONCURRENCY: ${WORKER_CONSUMER_FLATMAP_CONCURRENCY:-2}
     ports:
-      - "127.0.0.1:8182:8080"   # worker actuator at localhost:8182
+      - "127.0.0.1:8182:8081"   # worker actuator at localhost:8182
 
   # Prometheus — scrapes RabbitMQ, worker, and backend
   prometheus:
@@ -462,7 +445,7 @@ scrape_configs:
     scrape_interval: 15s
     metrics_path: /actuator/prometheus
     static_configs:
-      - targets: ['worker:8080']
+      - targets: ['worker:8081']   # worker runs on 8081, backend on 8080
 
   - job_name: backend
     scrape_interval: 15s

@@ -1,0 +1,965 @@
+{
+  "uid": "load-test-pipeline",
+  "title": "Load Test \u2014 Pipeline Overview",
+  "description": "Queue depth, worker performance, AI latency, and backend metrics for load test runs.",
+  "tags": [
+    "loadtest"
+  ],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 20,
+      "title": "Queue Overview",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 21,
+      "title": "Total Messages Ready",
+      "description": "Sum of ready messages across all queues. The number to watch during a test run.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rabbitmq_detailed_queue_messages_ready)",
+          "legendFormat": "Total ready"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "unit": "short",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "Messages Published / s",
+      "description": "Rate at which messages are published into exchanges. Driven by the upload script during the upload phase.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "irate(rabbitmq_global_messages_received_total[30s])",
+          "legendFormat": "Published / s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "Messages Routed to Queues / s",
+      "description": "Rate at which messages are routed from exchanges into queues. Should closely mirror publish rate \u2014 a gap indicates routing issues.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "irate(rabbitmq_global_messages_routed_total[30s])",
+          "legendFormat": "Routed / s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 1,
+      "title": "Queue Depth \u2014 All Queues",
+      "description": "Ready messages per queue over time. document.processing is the main drain curve. DLQ should stay at 0 on happy path runs.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_detailed_queue_messages_ready{queue=\"document.processing\"}",
+          "legendFormat": "document.processing"
+        },
+        {
+          "refId": "B",
+          "expr": "rabbitmq_detailed_queue_messages_ready{queue=\"document.processed\"}",
+          "legendFormat": "document.processed"
+        },
+        {
+          "refId": "C",
+          "expr": "rabbitmq_detailed_queue_messages_ready{queue=\"document.processing.dlq\"}",
+          "legendFormat": "document.processing.dlq \u26a0\ufe0f"
+        },
+        {
+          "refId": "D",
+          "expr": "rabbitmq_detailed_queue_messages_ready{queue=\"document.status\"}",
+          "legendFormat": "document.status"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "spanNulls": false
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "document.processing.dlq \u26a0\ufe0f"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "document.processing"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Message Publish Rate vs Deliver Rate",
+      "description": "Gap between publish and deliver rate = queue backpressure. If publish > deliver the queue grows.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "irate(rabbitmq_global_messages_received_total[30s])",
+          "legendFormat": "Publish rate (msg/s)"
+        },
+        {
+          "refId": "B",
+          "expr": "irate(rabbitmq_global_messages_delivered_total[30s])",
+          "legendFormat": "Deliver rate (msg/s)"
+        },
+        {
+          "refId": "C",
+          "expr": "irate(rabbitmq_global_messages_acknowledged_total[30s])",
+          "legendFormat": "Ack rate (msg/s)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "short",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Unacknowledged Messages (In-Flight)",
+      "description": "Messages the worker has received but not yet acked. Should equal QOS setting during active processing.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_detailed_queue_messages_unacked{queue=\"document.processing\"}",
+          "legendFormat": "Unacked (document.processing)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "unit": "short",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Worker Performance",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 4,
+      "title": "AI Call Latency \u2014 Average per Operation",
+      "description": "Average latency per AI call type (summarize/flashcards/quiz). Micrometer Timer is summary type \u2014 shows average = sum/count rate. With stub, this shows pipeline overhead beyond the stub delay.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 16,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(ai_call_latency_seconds_sum{application=\"worker\"}[1m]) / rate(ai_call_latency_seconds_count{application=\"worker\"}[1m])",
+          "legendFormat": "Avg latency \u2014 {{operation}}"
+        },
+        {
+          "refId": "B",
+          "expr": "ai_call_latency_seconds_max{application=\"worker\"}",
+          "legendFormat": "Max \u2014 {{operation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5
+          },
+          "unit": "s",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Retries & DLQ Events",
+      "description": "Retry counter shows processing failures being retried. DLQ routed counter shows messages that exhausted all retries.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 16,
+        "y": 27,
+        "w": 8,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(document_retry_count_total{application=\"worker\"}[1m])",
+          "legendFormat": "Retry rate"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(document_dlq_routed_total{application=\"worker\"}[1m])",
+          "legendFormat": "DLQ routed rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DLQ routed rate"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Worker JVM Heap",
+      "description": "Heap used vs committed. Watch for steady growth (leak) or sharp spikes (large PDFs in memory).",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jvm_memory_used_bytes{application=\"worker\", area=\"heap\"}",
+          "legendFormat": "Heap used \u2014 {{id}}"
+        },
+        {
+          "refId": "B",
+          "expr": "jvm_memory_committed_bytes{application=\"worker\", area=\"heap\"}",
+          "legendFormat": "Heap committed \u2014 {{id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "bytes",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Worker Threads",
+      "description": "Live threads. The boundedElastic scheduler (PDF download + extraction) has a default ceiling of 10\u00d7 CPU cores. Watch for saturation at high QOS.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jvm_threads_live_threads{application=\"worker\"}",
+          "legendFormat": "Live threads"
+        },
+        {
+          "refId": "B",
+          "expr": "jvm_threads_states_threads{application=\"worker\", state=\"runnable\"}",
+          "legendFormat": "Runnable threads"
+        },
+        {
+          "refId": "C",
+          "expr": "jvm_threads_states_threads{application=\"worker\", state=\"waiting\"}",
+          "legendFormat": "Waiting threads"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "short",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "Backend & Pipeline Latency",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 8,
+      "title": "End-to-End Pipeline Duration \u2014 Average",
+      "description": "Average time from document upload to terminal state (DONE/FAILED). Micrometer Timer is a summary type \u2014 average = sum/count rate over 1m window.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(document_e2e_duration_seconds_sum{application=\"backend\", status=\"DONE\"}[1m]) / rate(document_e2e_duration_seconds_count{application=\"backend\", status=\"DONE\"}[1m])",
+          "legendFormat": "Avg e2e duration (DONE)"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(document_e2e_duration_seconds_count{application=\"backend\", status=\"DONE\"}[1m])",
+          "legendFormat": "Throughput (docs/s)"
+        },
+        {
+          "refId": "C",
+          "expr": "rate(document_processing_duration_seconds_sum{application=\"backend\", status=\"DONE\"}[1m]) / rate(document_processing_duration_seconds_count{application=\"backend\", status=\"DONE\"}[1m])",
+          "legendFormat": "Avg processing duration (IN_PROGRESS\u2192DONE)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "s",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Backend DB Connection Pool (HikariCP)",
+      "description": "Active and pending DB connections. If active connections hit the pool ceiling (10), DB writes queue up \u2014 this is the single-writer bottleneck made visible.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 45,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "hikaricp_connections_active{application=\"backend\"}",
+          "legendFormat": "Active connections"
+        },
+        {
+          "refId": "B",
+          "expr": "hikaricp_connections_pending{application=\"backend\"}",
+          "legendFormat": "Pending (queued)"
+        },
+        {
+          "refId": "C",
+          "expr": "hikaricp_connections{application=\"backend\"}",
+          "legendFormat": "Total connections"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pending (queued)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 30,
+      "title": "CPU & Performance",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 31,
+      "title": "Worker CPU Usage",
+      "description": "Process CPU usage. Watch for saturation at high QOS settings \u2014 bounded elastic thread pool ceiling shows here first.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "process_cpu_usage{application=\"worker\"}",
+          "legendFormat": "Worker CPU"
+        },
+        {
+          "refId": "B",
+          "expr": "process_cpu_usage{application=\"backend\"}",
+          "legendFormat": "Backend CPU"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 32,
+      "title": "Backend JVM Heap",
+      "description": "Backend heap \u2014 the DocumentProcessedConsumer writes all DB results here. Watch for pressure under high QOS when results arrive faster.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 54,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jvm_memory_used_bytes{application=\"backend\", area=\"heap\"}",
+          "legendFormat": "Heap used \u2014 {{id}}"
+        },
+        {
+          "refId": "B",
+          "expr": "jvm_memory_committed_bytes{application=\"backend\", area=\"heap\"}",
+          "legendFormat": "Heap committed \u2014 {{id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          },
+          "unit": "bytes",
+          "min": 0
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 33,
+      "title": "Consumer Capacity \u2014 document.processing",
+      "description": "Fraction of time the worker consumer is active (0=idle, 1=fully utilized). Should sit at ~1.0 while the queue has messages. Drops to 0 when queue is empty. Useful for seeing when the drain completes.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 62,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_detailed_queue_consumer_capacity{queue=\"document.processing\"}",
+          "legendFormat": "Consumer capacity"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "title": "Worker Unacked vs QOS Capacity",
+      "description": "Unacked messages = messages in-flight in the worker. Should sit at exactly your QOS value during active processing. If it drops below QOS the worker has spare capacity.",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 62,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_detailed_queue_messages_unacked{queue=\"document.processing\"}",
+          "legendFormat": "Unacked (in-flight)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1,
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "Load Test Events",
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "blue",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

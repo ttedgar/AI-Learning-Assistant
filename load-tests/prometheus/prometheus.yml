@@ -1,0 +1,41 @@
+global:
+  scrape_interval:     15s   # default for JVM / system metrics
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # RabbitMQ aggregate metrics (connections, channels, memory, etc.)
+  - job_name: rabbitmq
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['rabbitmq:15692']
+
+  # RabbitMQ per-queue metrics — requires the /metrics/detailed endpoint.
+  # This is what gives us rabbitmq_detailed_queue_messages{queue="..."} labels
+  # so we can graph individual queues in Grafana.
+  - job_name: rabbitmq_detailed
+    scrape_interval: 5s
+    metrics_path: /metrics/detailed
+    params:
+      family: ['queue_coarse_metrics', 'queue_metrics']
+    static_configs:
+      - targets: ['rabbitmq:15692']
+
+  # Worker — exposes /actuator/prometheus via micrometer-registry-prometheus.
+  # Port 8081: worker's server.port default (backend uses 8080).
+  # Custom metrics: ai.call.latency, document.retry.count, document.dlq.routed,
+  # rabbitmq.publish.confirm.failure, document.e2e.duration (from backend consumer).
+  - job_name: worker
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['worker:8081']
+
+  # Backend — exposes /actuator/prometheus.
+  # Metrics: document.e2e.duration, document.processing.duration, JVM heap,
+  # HikariCP connection pool, HTTP request latency.
+  - job_name: backend
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['backend:8080']

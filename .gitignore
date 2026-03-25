@@ -23,3 +23,11 @@ frontend/.env
 
 # Claude Code local project settings (machine-specific; contains MCP permissions)
 .claude/settings.local.json
+
+# Load test raw results — committed summaries (*.md) are not ignored
+load-tests/results/**/*.json
+load-tests/results/**/*.csv
+.wslconfig_temp
+
+# Temp files left by sed (from RLS migration session)
+sed*

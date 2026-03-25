@@ -1,0 +1,96 @@
+# Load test compose overlay.
+#
+# Replaces the real ai-service with the stub and adds Prometheus + Grafana.
+# All other services (rabbitmq, redis, backend, worker, frontend) are inherited
+# from docker-compose.yml and docker-compose.dev.yml unchanged, except where
+# explicitly overridden below.
+#
+# Usage:
+#   docker-compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.dev.yml \
+#     -f load-tests/docker-compose.loadtest.yml \
+#     up -d --build
+#
+# Change QOS between runs (restarts worker only):
+#   WORKER_CONSUMER_QOS=5 WORKER_CONSUMER_FLATMAP_CONCURRENCY=5 \
+#     docker-compose -f docker-compose.yml -f docker-compose.dev.yml \
+#     -f load-tests/docker-compose.loadtest.yml up -d worker
+#
+# Change stub behaviour between scenarios (restarts ai-service only):
+#   STUB_FAILURE_RATE=1.0 STUB_DELAY_SECONDS=0 \
+#     docker-compose -f docker-compose.yml -f docker-compose.dev.yml \
+#     -f load-tests/docker-compose.loadtest.yml up -d ai-service
+
+version: "3.9"
+
+services:
+
+  # ── Stub AI service ────────────────────────────────────────────────────────
+  # Replaces the real ai-service. Container name stays "ai-service" so the
+  # worker's AI_SERVICE_URL=http://ai-service:8000 resolves without changes.
+  # The base compose environment (GOOGLE_API_KEY etc.) is inherited but ignored
+  # by the stub — no LLM calls are made.
+  ai-service:
+    build:
+      context: ./load-tests/stub-ai-service
+      dockerfile: Dockerfile
+    environment:
+      INTERNAL_API_KEY:     ${INTERNAL_API_KEY:-dev-internal-key}
+      STUB_DELAY_SECONDS:   ${STUB_DELAY_SECONDS:-1.0}
+      STUB_FAILURE_RATE:    ${STUB_FAILURE_RATE:-0.0}
+      STUB_RATE_LIMIT_RATE: ${STUB_RATE_LIMIT_RATE:-0.0}
+
+  # ── RabbitMQ — enable Prometheus plugin ────────────────────────────────────
+  # Mounts the enabled_plugins file to activate rabbitmq_prometheus.
+  # Exposes port 15692 for Prometheus scraping.
+  # All other rabbitmq config (credentials, management port, volumes) is
+  # inherited from docker-compose.yml.
+  rabbitmq:
+    volumes:
+      - ./load-tests/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins
+    ports:
+      - "127.0.0.1:15692:15692"   # Prometheus metrics endpoint
+
+  # ── Worker — QOS tuning + actuator port ───────────────────────────────────
+  # WORKER_CONSUMER_QOS and WORKER_CONSUMER_FLATMAP_CONCURRENCY are passed via
+  # environment variables so QOS can be changed between runs without modifying
+  # any file — just restart the worker with new env var values.
+  # Note: worker runs on port 8081 (not 8080 — backend uses 8080).
+  worker:
+    environment:
+      WORKER_CONSUMER_QOS:                 ${WORKER_CONSUMER_QOS:-2}
+      WORKER_CONSUMER_FLATMAP_CONCURRENCY: ${WORKER_CONSUMER_FLATMAP_CONCURRENCY:-2}
+    ports:
+      - "127.0.0.1:8182:8081"   # worker actuator at localhost:8182 for manual inspection
+
+  # ── Prometheus ─────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    volumes:
+      - ./load-tests/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  # ── Grafana ────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED:  "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./load-tests/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  grafana-data:

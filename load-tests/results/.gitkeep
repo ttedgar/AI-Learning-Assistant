@@ -1,0 +1,8 @@
+# This directory holds load test result files.
+#
+# Gitignored (raw data, too large to commit):
+#   *.json   — structured result files written by upload.py
+#   *.csv    — optional raw prometheus exports
+#
+# Committed (human-readable findings, worth preserving):
+#   summary-YYYYMMDD.md  — filled in after each test session
