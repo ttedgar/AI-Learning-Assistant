@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Production: swap for a paid model (e.g. meta-llama/llama-3.1-70b-instruct)
     # by changing these env vars — no code changes required.
     openrouter_api_key: str = ""
-    primary_model: str = "meta-llama/llama-3.1-8b-instruct:free"
+    primary_model: str = "openrouter/free"
     fallback_model: str = "openrouter/free"
 
     # Long-document thresholds (model-agnostic).
