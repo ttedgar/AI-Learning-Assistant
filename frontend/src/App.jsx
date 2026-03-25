@@ -61,6 +61,18 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
+
+      // Sync on page load/refresh: onAuthStateChange fires INITIAL_SESSION (not
+      // SIGNED_IN) so we must sync here too. The backend endpoint is an upsert —
+      // safe to call on every load.
+      if (session) {
+        api
+          .post('/api/v1/auth/sync', {
+            supabaseUserId: session.user.id,
+            email: session.user.email,
+          })
+          .catch((err) => console.error('[auth] Failed to sync user with backend:', err))
+      }
     })
 
     const {

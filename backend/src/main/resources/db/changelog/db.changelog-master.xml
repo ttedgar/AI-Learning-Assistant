@@ -15,5 +15,6 @@
     <include file="db/changelog/002-state-machine-columns.sql"/>
     <include file="db/changelog/003-add-error-code.sql"/>
     <include file="db/changelog/004-add-ai-model.sql"/>
+    <include file="db/changelog/005-enable-rls.sql"/>
 
 </databaseChangeLog>
