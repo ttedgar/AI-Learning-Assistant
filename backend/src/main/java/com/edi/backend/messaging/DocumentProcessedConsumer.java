@@ -88,14 +88,17 @@ public class DocumentProcessedConsumer {
             // SELECT FOR UPDATE — serialises concurrent duplicate deliveries.
             // The second consumer blocks here until the first commits; it then reads
             // the post-commit terminal status and takes the short-circuit path below.
-            Document document = documentRepository.findByIdForUpdate(documentId)
-                    .orElseThrow(() -> {
-                        log.error("Document not found for processed message: documentId={}", documentId);
-                        // Ack and drop — retrying won't help if the document doesn't exist.
-                        // Root cause: upload dual-write failure (DB rollback after RabbitMQ publish).
-                        // Mitigated by transactional outbox (backlog).
-                        return new IllegalStateException("Document not found: " + documentId);
-                    });
+            // Ack and drop if document not found — retrying won't help.
+            // Root cause: upload dual-write failure (DB rollback after RabbitMQ publish).
+            // Previously used orElseThrow which caused Spring AMQP to nack+requeue the
+            // message indefinitely. Returning normally causes Spring AMQP to ack+drop.
+            // Production fix: transactional outbox pattern eliminates the dual-write window.
+            var docOpt = documentRepository.findByIdForUpdate(documentId);
+            if (docOpt.isEmpty()) {
+                log.error("Document not found for processed message, acking and dropping: documentId={}", documentId);
+                return;
+            }
+            Document document = docOpt.get();
 
             // Terminal-state short-circuit (evaluated post-lock, so this is safe under concurrency).
             if (DocumentStateMachine.isTerminal(document.getStatus())) {
