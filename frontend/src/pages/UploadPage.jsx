@@ -153,7 +153,7 @@ export default function UploadPage() {
             isDragging
               ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950'
               : file
-              ? 'border-green-300 bg-green-50 cursor-default'
+              ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950 cursor-default'
               : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:hover:bg-gray-800'
           }`}
         >
