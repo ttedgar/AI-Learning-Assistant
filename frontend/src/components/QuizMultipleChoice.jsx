@@ -42,7 +42,7 @@ export default function QuizMultipleChoice({ question, questionNumber, onAnswer 
           <button
             key={option}
             onClick={() => handleSelect(option)}
-            className={`w-full text-left px-4 py-3 text-sm rounded-lg border transition-colors ${optionStyle(option)}`}
+            className={`w-full text-left px-4 py-3 text-sm text-gray-900 dark:text-gray-100 rounded-lg border transition-colors ${optionStyle(option)}`}
             data-testid={`option-${option}`}
           >
             {option}
