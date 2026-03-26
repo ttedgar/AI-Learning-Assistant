@@ -210,7 +210,7 @@ export default function DashboardPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto px-8 py-8">
+      <div className="max-w-4xl mx-auto px-8 py-8 min-h-full flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <footer className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-800 text-center text-xs text-gray-400 dark:text-gray-600">
+      <footer className="mt-auto pt-8 border-t border-gray-100 dark:border-gray-800 text-center text-xs text-gray-400 dark:text-gray-600 pb-6">
         <nav className="flex items-center justify-center gap-5">
           <Link to="/how-to-use" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
             How to Use

@@ -18,6 +18,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { Link } from 'react-router-dom'
 import useDarkMode from '../hooks/useDarkMode'
+import useAuthStore from '../stores/authStore'
 
 // ── Edge helpers ──────────────────────────────────────────────────────────────
 
@@ -752,6 +753,7 @@ const edgeTypes = { percentEdge: PercentEdge, internalEdge: InternalEdge }
 
 export default function SystemMapPage() {
   const [dark, setDark] = useDarkMode()
+  const user = useAuthStore((s) => s.user)
   const [activeService, setActiveService] = useState(null)  // level 2
   const [activeModule, setActiveModule]   = useState(null)  // level 3 (internal node id)
   const [showMinimap, setShowMinimap] = useState(false)
@@ -813,13 +815,13 @@ export default function SystemMapPage() {
       <header className="flex-shrink-0 flex items-center justify-between px-5 py-3 bg-white dark:bg-gray-950 border-b border-gray-100 dark:border-gray-800">
         <div className="flex items-center gap-3 min-w-0">
           <Link
-            to="/"
+            to={user ? '/dashboard' : '/'}
             className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors flex-shrink-0"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
             </svg>
-            Home
+            {user ? 'Dashboard' : 'Home'}
           </Link>
           <span className="text-gray-200 dark:text-gray-700 flex-shrink-0">/</span>
           <span className="text-sm font-medium text-gray-900 dark:text-white flex-shrink-0">
