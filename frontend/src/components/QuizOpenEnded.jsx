@@ -25,8 +25,8 @@ export default function QuizOpenEnded({ question, questionNumber, onAnswer }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-gray-900">
-        <span className="text-gray-400 mr-2">{questionNumber}.</span>
+      <p className="text-sm font-medium text-gray-900 dark:text-white">
+        <span className="text-gray-400 dark:text-gray-500 mr-2">{questionNumber}.</span>
         {question.question}
       </p>
 
@@ -37,7 +37,7 @@ export default function QuizOpenEnded({ question, questionNumber, onAnswer }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your answer…"
-            className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+            className="flex-1 px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
             data-testid="open-ended-input"
           />
           <button
@@ -50,14 +50,14 @@ export default function QuizOpenEnded({ question, questionNumber, onAnswer }) {
         </form>
       ) : (
         <div className="space-y-2" data-testid="open-ended-result">
-          <p className="text-sm text-gray-600">
-            Your answer: <span className="font-medium">{input}</span>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Your answer: <span className="font-medium text-gray-900 dark:text-white">{input}</span>
           </p>
-          <div className="flex items-start gap-2 bg-green-50 border border-green-100 rounded-lg px-4 py-3">
-            <svg className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <div className="flex items-start gap-2 bg-green-50 dark:bg-green-950 border border-green-100 dark:border-green-800 rounded-lg px-4 py-3">
+            <svg className="h-4 w-4 text-green-500 dark:text-green-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
-            <p className="text-sm text-green-700">
+            <p className="text-sm text-green-700 dark:text-green-300">
               <span className="font-medium">Correct answer:</span> {question.correctAnswer}
             </p>
           </div>

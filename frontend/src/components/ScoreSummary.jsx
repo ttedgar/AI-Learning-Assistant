@@ -16,7 +16,7 @@ export default function ScoreSummary({ score, total, onRestart }) {
   return (
     <div className="flex flex-col items-center py-12 gap-6" data-testid="score-summary">
       {/* Score ring */}
-      <div className="h-28 w-28 rounded-full bg-gray-50 border-4 border-gray-100 flex items-center justify-center">
+      <div className="h-28 w-28 rounded-full bg-gray-50 dark:bg-gray-800 border-4 border-gray-100 dark:border-gray-700 flex items-center justify-center">
         <span className={`text-3xl font-bold ${ringColor}`} data-testid="score-percentage">
           {percentage}%
         </span>
@@ -24,17 +24,17 @@ export default function ScoreSummary({ score, total, onRestart }) {
 
       {/* Feedback */}
       <div className="text-center">
-        <p className="text-xl font-semibold text-gray-900">{feedback}</p>
-        <p className="text-sm text-gray-500 mt-1" data-testid="score-detail">
-          You got <span className="font-medium text-gray-700">{score}</span> out of{' '}
-          <span className="font-medium text-gray-700">{total}</span> questions correct.
+        <p className="text-xl font-semibold text-gray-900 dark:text-white">{feedback}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1" data-testid="score-detail">
+          You got <span className="font-medium text-gray-700 dark:text-gray-200">{score}</span> out of{' '}
+          <span className="font-medium text-gray-700 dark:text-gray-200">{total}</span> questions correct.
         </p>
       </div>
 
       {/* Restart */}
       <button
         onClick={onRestart}
-        className="flex items-center gap-2 px-6 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+        className="flex items-center gap-2 px-6 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
         data-testid="restart-quiz-button"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

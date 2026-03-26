@@ -66,7 +66,7 @@ export default function QuizViewer({ questions }) {
 
       {/* Show "View Score" button only once all questions are answered */}
       {allAnswered && (
-        <div className="pt-4 border-t border-gray-200 flex justify-center">
+        <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-center">
           <button
             onClick={() => setShowScore(true)}
             className="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
