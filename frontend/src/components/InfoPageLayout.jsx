@@ -1,12 +1,15 @@
 import { Link } from 'react-router-dom'
 import useDarkMode from '../hooks/useDarkMode'
+import useAuthStore from '../stores/authStore'
 
 /**
  * Shared shell for public info pages (How to Use, Technical Info, Diary).
  * Provides a minimal nav bar and consistent typography container.
+ * Logged-in users see "Dashboard" back link instead of "Home".
  */
 export default function InfoPageLayout({ title, children }) {
   const [dark, setDark] = useDarkMode()
+  const user = useAuthStore((s) => s.user)
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950 transition-colors duration-200">
@@ -14,13 +17,13 @@ export default function InfoPageLayout({ title, children }) {
       <header className="sticky top-0 z-10 bg-white/80 dark:bg-gray-950/80 backdrop-blur border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
           <Link
-            to="/"
+            to={user ? '/dashboard' : '/'}
             className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
             </svg>
-            Home
+            {user ? 'Dashboard' : 'Home'}
           </Link>
 
           <span className="text-sm font-medium text-gray-900 dark:text-white">{title}</span>

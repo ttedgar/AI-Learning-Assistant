@@ -267,6 +267,26 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      <footer className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-800 text-center text-xs text-gray-400 dark:text-gray-600">
+        <nav className="flex items-center justify-center gap-5">
+          <Link to="/how-to-use" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
+            How to Use
+          </Link>
+          <span>·</span>
+          <Link to="/technical" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
+            Technical Information
+          </Link>
+          <span>·</span>
+          <Link to="/architecture" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
+            Architecture
+          </Link>
+          <span>·</span>
+          <Link to="/load-test" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
+            Load Test Results
+          </Link>
+        </nav>
+      </footer>
     </AppLayout>
   )
 }
