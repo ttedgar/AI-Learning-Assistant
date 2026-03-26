@@ -65,7 +65,7 @@ Worker (Spring Boot)  ────────────┘
      │  HTTP  X-Internal-Api-Key
      ▼
 AI Service (Python FastAPI)
-  LangChain + Gemini 2.5 Flash + Langfuse`}</CodeBlock>
+  LangChain + OpenRouter (free tier) + Langfuse`}</CodeBlock>
         </Section>
 
         {/* Services */}
@@ -113,11 +113,12 @@ AI Service (Python FastAPI)
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">AI Service — Python 3.12, FastAPI</h3>
               <ul className="space-y-2 text-gray-600 dark:text-gray-400 text-sm">
-                <li><strong className="text-gray-800 dark:text-gray-200">DIP at architecture level</strong> — This is the only service that knows about Gemini. The worker depends on this service's HTTP interface, not on Gemini directly. Swapping the LLM (Gemini → OpenAI → Claude) requires changing only this service — worker and backend are completely isolated.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">LLM provider</strong> — Uses OpenRouter's free tier (<code className="text-xs">openrouter/free</code>), which routes requests to a randomly selected free model (e.g., Llama 3.1 8B, Mistral 7B). The model varies per request — acceptable for a portfolio project, but production would pin a specific model for deterministic output quality.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">DIP at architecture level</strong> — The worker depends on this service's HTTP interface, not on any LLM SDK directly. This was proven in practice: the LLM provider was migrated from Gemini to OpenRouter with zero changes to the worker or backend — only the AI service was modified. The architectural boundary held exactly as designed.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Endpoints</strong> — <code className="text-xs text-indigo-600 dark:text-indigo-400">POST /ai/summarize</code>, <code className="text-xs text-indigo-600 dark:text-indigo-400">POST /ai/flashcards</code>, <code className="text-xs text-indigo-600 dark:text-indigo-400">POST /ai/quiz</code>. All protected by <code className="text-xs">X-Internal-Api-Key</code> middleware.</li>
                 <li><strong className="text-gray-800 dark:text-gray-200">Long documents</strong> — Text above 60,000 characters is chunked (50K char chunks) and processed via LangChain map-reduce: each chunk is summarised separately, then all partial summaries are reduced into one. This avoids hitting the model's context window limit.</li>
-                <li><strong className="text-gray-800 dark:text-gray-200">Redis idempotency</strong> — Each AI operation is cached by <code className="text-xs">(operation, document_id)</code> with a 24-hour TTL. Worker retries and DLQ replays return the cached result without a second Gemini call — no duplicate cost, no duplicate content.</li>
-                <li><strong className="text-gray-800 dark:text-gray-200">Observability</strong> — Langfuse traces every Gemini call: prompt version, model, input tokens, output tokens, latency, response. Prompts are fetched from the Langfuse dashboard at runtime, with hardcoded fallbacks if the fetch fails.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">Redis idempotency</strong> — Each AI operation is cached by <code className="text-xs">(operation, document_id)</code> with a 24-hour TTL. Worker retries and DLQ replays return the cached result without a second LLM call — no duplicate cost, no duplicate content.</li>
+                <li><strong className="text-gray-800 dark:text-gray-200">Observability</strong> — Langfuse traces every LLM call: prompt version, model, input tokens, output tokens, latency, response. Prompts are fetched from the Langfuse dashboard at runtime, with hardcoded fallbacks if the fetch fails.</li>
               </ul>
             </div>
           </div>
@@ -176,8 +177,8 @@ Dead-letter path:
             />
             <DecisionCard
               title="DIP at Architecture Level"
-              impl="Worker calls the AI service's HTTP interface. Only the AI service imports the Gemini SDK."
-              why="Swapping LLM providers (Gemini → OpenAI → Claude) requires modifying exactly one service. Worker and backend have zero LLM coupling."
+              impl="Worker calls the AI service's HTTP interface. Only the AI service imports the LLM SDK."
+              why="Already proven: migrated from Gemini to OpenRouter with zero changes to worker or backend. The DIP boundary held exactly as designed."
             />
             <DecisionCard
               title="CorrelationId Tracing"
@@ -288,7 +289,7 @@ quiz_questions
             </li>
             <li>
               <strong className="text-gray-800 dark:text-gray-200">LLM observability</strong> — Langfuse captures
-              every Gemini call: prompt version, model ID, input token count, output token count, latency, full response.
+              every LLM call: prompt version, model ID, input token count, output token count, latency, full response.
               Prompts are versioned and editable in the Langfuse UI without a deployment.
             </li>
             <li>
@@ -313,7 +314,7 @@ quiz_questions
                   ['Frontend', 'React 19, Vite, Tailwind CSS v4, Zustand, TanStack Query, React Router, Axios, Supabase JS, @xyflow/react'],
                   ['Backend', 'Java 21 (virtual threads), Spring Boot 3.4, Spring Security, Spring AMQP, Spring Data JPA, Hibernate 6, Liquibase, Bucket4j, Springdoc OpenAPI'],
                   ['Worker', 'Java 21 (virtual threads), Spring Boot 3.4, reactor-rabbitmq, Apache PDFBox, WebFlux (WebClient, Mono.zip)'],
-                  ['AI Service', 'Python 3.12, FastAPI, LangChain 0.3, langchain-google-genai, Gemini 2.5 Flash, Langfuse, Pydantic'],
+                  ['AI Service', 'Python 3.12, FastAPI, LangChain 0.3, langchain-openai, OpenRouter free tier, Langfuse, Pydantic'],
                   ['Database', 'PostgreSQL (Supabase), RLS, JSONB'],
                   ['Messaging', 'RabbitMQ — direct exchange, 2 queues + dead-letter queue'],
                   ['Cache / Rate limit', 'Redis (Lettuce) + Bucket4j (Lua scripts, atomic token-bucket)'],

@@ -13,6 +13,7 @@ Thumbs.db
 
 # Environment files — never commit secrets
 .env
+.env.loadtest
 backend/.env
 worker/.env
 ai-service/.env
@@ -24,9 +25,11 @@ frontend/.env
 # Claude Code local project settings (machine-specific; contains MCP permissions)
 .claude/settings.local.json
 
-# Load test raw results — committed summaries (*.md) are not ignored
+# Load test raw results and tooling — committed summaries (*.md) are not ignored
 load-tests/results/**/*.json
 load-tests/results/**/*.csv
+load-tests/results/grafana-exports/
+load-tests/tools/
 .wslconfig_temp
 
 # Temp files left by sed (from RLS migration session)

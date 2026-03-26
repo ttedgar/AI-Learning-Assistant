@@ -57,7 +57,7 @@ const makeSystemEdges = (dark) => [
   // Straight down: Worker → AI Service (same column)
   { id: 'w-ai',   source: 'worker',    sourceHandle: 'bottom-s', target: 'aiservice', targetHandle: 'top-t',    label: 'HTTP · API key',        ...edgeLabelStyle(), data: { tooltip: 'Worker calls AI Service over HTTP for each of the three operations (summarize, flashcards, quiz); requests carry X-Internal-Api-Key and X-Correlation-Id headers' } },
   // AI Service left-s → Redis bottom-t: diagonal left and up
-  { id: 'ai-rd',  source: 'aiservice', sourceHandle: 'left-s',   target: 'redis',     targetHandle: 'bottom-t', label: 'idempotency',           ...edgeLabelStyle(), data: { tooltip: 'AI Service uses Redis to cache LLM results keyed by (operation, document_id) with 24h TTL; a claim-then-cache pattern prevents duplicate Gemini calls on concurrent retries' } },
+  { id: 'ai-rd',  source: 'aiservice', sourceHandle: 'left-s',   target: 'redis',     targetHandle: 'bottom-t', label: 'idempotency',           ...edgeLabelStyle(), data: { tooltip: 'AI Service uses Redis to cache LLM results keyed by (operation, document_id) with 24h TTL; a claim-then-cache pattern prevents duplicate LLM calls on concurrent retries' } },
 ]
 
 const mkInternalEdge = (id, source, target, label, _dark, opts = {}) => ({
@@ -174,12 +174,12 @@ const SERVICE_DETAIL_EDGES = {
     // api → idem: upper-left source (left-s2) → top-left target (top-t) — parallel with result below
     mkInternalEdge('e2', 'ai-api',   'ai-idem',  'check cache',   dark, { sourceHandle: 'left-s2',  targetHandle: 'top-t',    tooltip: 'Before calling the chain, Redis is checked for a cached result keyed by (operation, document_id)' }),
     // idem → api: top-right source (top-s) → lower-left target (left-t2) — parallel with check cache above
-    mkInternalEdge('e3', 'ai-idem',  'ai-api',   'result',        dark, { sourceHandle: 'top-s',    targetHandle: 'left-t2',  tooltip: 'Returns cached result immediately to caller — skips LangChain and Gemini entirely on cache hit' }),
+    mkInternalEdge('e3', 'ai-idem',  'ai-api',   'result',        dark, { sourceHandle: 'top-s',    targetHandle: 'left-t2',  tooltip: 'Returns cached result immediately to caller — skips LangChain and the LLM entirely on cache hit' }),
     mkInternalEdge('e4', 'ai-idem',  'ai-chain', 'on cache miss', dark, { sourceHandle: 'right-s',  targetHandle: 'left-t',   tooltip: 'No cached result found — delegates to LangChain chain for live LLM processing' }),
-    mkInternalEdge('e5', 'ai-chain', 'ai-gem',   'LLM call',      dark, { sourceHandle: 'bottom-s', targetHandle: 'top-t',    tooltip: 'LangChain chain sends structured prompt with extracted text to Gemini 1.5 Flash via Google GenAI SDK' }),
-    mkInternalEdge('e6', 'ai-gem',   'ai-chain', 'response',      dark, { sourceHandle: 'top-s',    targetHandle: 'bottom-t', tooltip: 'Structured JSON response returned from Gemini; LangChain output parser validates and maps to the domain schema' }),
+    mkInternalEdge('e5', 'ai-chain', 'ai-gem',   'LLM call',      dark, { sourceHandle: 'bottom-s', targetHandle: 'top-t',    tooltip: 'LangChain chain sends structured prompt with extracted text to OpenRouter via ChatOpenAI SDK' }),
+    mkInternalEdge('e6', 'ai-gem',   'ai-chain', 'response',      dark, { sourceHandle: 'top-s',    targetHandle: 'bottom-t', tooltip: 'Structured JSON response returned from the LLM; LangChain output parser validates and maps to the domain schema' }),
     mkInternalEdge('e7', 'ai-chain', 'ai-lf',    'LLM traces',    dark, { sourceHandle: 'right-s',  targetHandle: 'left-t',   tooltip: 'LangChain callback fires after every chain run, sending latency, token count, prompt and output to Langfuse' }),
-    mkInternalEdge('e8', 'ai-gem',   'ai-idem',  'cache 24h',     dark, { sourceHandle: 'left-s',   targetHandle: 'bottom-t', tooltip: 'Successful Gemini response written to Redis with 24h TTL keyed by (operation, document_id)' }),
+    mkInternalEdge('e8', 'ai-gem',   'ai-idem',  'cache 24h',     dark, { sourceHandle: 'left-s',   targetHandle: 'bottom-t', tooltip: 'Successful LLM response written to Redis with 24h TTL keyed by (operation, document_id)' }),
   ],
   rabbitmq: (dark) => [
     mkInternalEdge('e1', 'rmq-ex',   'rmq-proc',   'routing key',        dark, { sourceHandle: 'left-s',   targetHandle: 'top-t', tooltip: 'Routes to document.processing queue — carries document ID for the Worker to download and process' }),
@@ -260,10 +260,10 @@ const SERVICE_DETAIL_NODES = {
   aiservice: [
     mkIn('ai-api',   'FastAPI Router',         'POST /ai/summarize · /ai/flashcards · /ai/quiz · X-Internal-Api-Key guard · CorrelationIdMiddleware',  450,   0, '#f59e0b'),
     mkIn('ai-mid',   'Correlation Middleware', 'ContextVar propagation · correlation_id_var.set(id) · injected into every Python log record',            900,   0, '#22c55e'),
-    mkIn('ai-idem',  'Redis Idempotency',      'Claim-then-cache per (operation, document_id) · 24h TTL · prevents duplicate Gemini calls on retries',   0, 220, '#818cf8', true),
+    mkIn('ai-idem',  'Redis Idempotency',      'Claim-then-cache per (operation, document_id) · 24h TTL · prevents duplicate LLM calls on retries',   0, 220, '#818cf8', true),
     mkIn('ai-chain', 'LangChain Chains',       'Summarize · Flashcard · Quiz chains · chunk + map-reduce for long documents',                           450, 220, '#a855f7', true),
     mkIn('ai-lf',    'Langfuse',               'LLM observability · LangChain callback handler · traces every chain run · latency · token usage · prompt versions', 900, 220, '#16a34a'),
-    mkIn('ai-gem',   'Gemini API',             'gemini-1.5-flash · structured output · LLM responses parsed and returned to worker',                    450, 440, '#f97316'),
+    mkIn('ai-gem',   'OpenRouter API',         'openrouter/free · structured output · LLM responses parsed and returned to worker',                    450, 440, '#f97316'),
   ],
   //
   // RabbitMQ — 3 columns, 3 rows (5 nodes)
@@ -285,7 +285,7 @@ const SERVICE_DETAIL_NODES = {
   //
   redis: [
     mkIn('rd-bucket', 'Bucket4j Rate Limiter', '10 uploads/hr/user · token bucket · LettuceBasedProxyManager · Lua script atomic check-and-decrement · state in Redis not JVM',    0,   0, '#818cf8'),
-    mkIn('rd-idem',   'AI Idempotency Cache',  'Key: op:summarize:<doc_id> · 24h TTL · claim-then-cache · prevents duplicate Gemini calls on worker retry or DLQ replay',          672,   0, '#f59e0b'),
+    mkIn('rd-idem',   'AI Idempotency Cache',  'Key: op:summarize:<doc_id> · 24h TTL · claim-then-cache · prevents duplicate LLM calls on worker retry or DLQ replay',          672,   0, '#f59e0b'),
     mkIn('rd-jwk',    'JWK Cache',             'Supabase public JWKS keys · 15min TTL · 5min refresh window · ES256 asymmetric · backend never holds private key',                 336, 220, '#22d3ee'),
   ],
   //
@@ -462,9 +462,9 @@ const L3_NODES = {
   //
   'ai-idem': [
     mkIn('aid-check',   'Check Result Cache',    'GET result:{op}:{doc_id} · if key exists → return cached value immediately · no LLM call · prevents duplicate spend on worker retry',   450,   0, '#818cf8'),
-    mkIn('aid-hit',     'Cache Hit',             'Cached result returned directly · 24h TTL means even DLQ replay after hours still hits cache · zero extra Gemini API cost',              900,   0, '#22c55e'),
+    mkIn('aid-hit',     'Cache Hit',             'Cached result returned directly · 24h TTL means even DLQ replay after hours still hits cache · zero extra LLM API cost',              900,   0, '#22c55e'),
     mkIn('aid-claim',   'SETNX Claim',           'SET claim:{op}:{doc_id} NX EX 300 · atomic: only first caller succeeds · concurrent workers with same doc blocked at this step',        450, 220, '#818cf8'),
-    mkIn('aid-process', 'LLM Processing',        'LangChain chain invoked → Gemini API call · structured output parsed · this is the expensive operation the idempotency layer protects',  450, 440, '#818cf8'),
+    mkIn('aid-process', 'LLM Processing',        'LangChain chain invoked → OpenRouter API call · structured output parsed · this is the expensive operation the idempotency layer protects',  450, 440, '#818cf8'),
     mkIn('aid-store',   'SET Result + 24h TTL',  'SET result:{op}:{doc_id} <value> EX 86400 · DELETE claim key · future callers hit Cache Hit path · claim released on success or error', 450, 660, '#818cf8'),
   ],
 }
@@ -534,7 +534,7 @@ const L3_EDGES = {
     mkInternalEdge('l1', 'aid-check',   'aid-hit',     'cached',         dark, { sourceHandle: 'right-s',  targetHandle: 'left-t', tooltip: 'Redis GET returns a non-null value — cached LLM result returned immediately to the caller without any chain call' }),
     mkInternalEdge('l2', 'aid-check',   'aid-claim',   'cache miss',     dark, { sourceHandle: 'bottom-s', targetHandle: 'top-t',  tooltip: 'Redis GET returns null — proceeds to claim the operation slot before calling the LLM to prevent duplicate calls' }),
     mkInternalEdge('l3', 'aid-claim',   'aid-process', 'claim acquired', dark, { sourceHandle: 'bottom-s', targetHandle: 'top-t',  tooltip: 'Redis SET NX acquires a processing lock for this (operation, document_id) pair; concurrent requests wait or fail fast' }),
-    mkInternalEdge('l4', 'aid-process', 'aid-store',   'LLM result',     dark, { sourceHandle: 'bottom-s', targetHandle: 'top-t',  tooltip: 'LLM result received — written to Redis with 24h TTL to serve all future identical requests without calling Gemini' }),
+    mkInternalEdge('l4', 'aid-process', 'aid-store',   'LLM result',     dark, { sourceHandle: 'bottom-s', targetHandle: 'top-t',  tooltip: 'LLM result received — written to Redis with 24h TTL to serve all future identical requests without calling the LLM' }),
   ],
 }
 

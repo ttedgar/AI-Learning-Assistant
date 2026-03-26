@@ -1,5 +1,228 @@
 # Load Test Plan — AI Learning Assistant
 
+---
+
+## ⚡ QUICK START — Read this after every PC restart
+
+This is the complete session checklist. Follow it top to bottom without skipping steps.
+Skipping steps is how you lose data or corrupt the production app.
+
+---
+
+### 0. Before anything — Railway kill-switch
+
+Go to **Railway → backend service → Variables** and confirm:
+```
+APP_RECOVERY_ENABLED=false
+```
+If it's not there, add it now. This prevents production queue pollution during the test.
+**Do not start the stack without this.**
+
+---
+
+### 1. Start the load test stack
+
+```powershell
+docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d
+```
+
+Wait ~60 seconds for all services to start.
+
+---
+
+### 2. Verify Prometheus targets — ALL THREE must be UP
+
+Open: **http://localhost:9090/targets**
+
+You must see:
+- `backend` — UP ✅
+- `worker` — UP ✅
+- `rabbitmq` — UP ✅
+
+**If any target is DOWN, do not proceed.** Check `docker logs <service> --tail 30`.
+Common fix: `docker-compose ... restart worker` if worker failed to connect to RabbitMQ.
+
+---
+
+### 3. Import Grafana dashboards (first time only — skip if already imported)
+
+Open: **http://localhost:3000** (admin / admin)
+
+Import these two by ID (Dashboards → New → Import):
+- `10991` — RabbitMQ Overview
+- `4701` — JVM Micrometer
+
+The "Load Test — Pipeline Overview" dashboard loads automatically from provisioning.
+
+---
+
+### 4. Set the emergency brake
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:15673/api/policies/%2F/load-test-max-length" -Method PUT -Credential (New-Object PSCredential("guest", (ConvertTo-SecureString "guest" -AsPlainText -Force))) -ContentType "application/json" -Body '{"pattern": "document\\.processing", "definition": {"max-length": 2000}, "apply-to": "queues", "priority": 10}'
+```
+
+Verify at http://localhost:15673 → Admin → Policies — policy `load-test-max-length` must appear.
+
+---
+
+### 5. Clean slate — run before EVERY scenario
+
+```powershell
+.\load-tests\reset.ps1
+```
+
+When prompted, run this in **Supabase SQL editor** (loadtest project, not production):
+```sql
+DELETE FROM documents WHERE title LIKE 'loadtest-%';
+DELETE FROM users WHERE email LIKE 'loadtest-%@loadtest.local';
+```
+Press Enter to continue. The script purges all 4 queues and flushes Redis.
+
+---
+
+### 6. Run the scenarios in order
+
+**S1 — QOS=2**
+```powershell
+$env:WORKER_CONSUMER_QOS="2"; $env:WORKER_CONSUMER_FLATMAP_CONCURRENCY="2"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d worker
+```
+Wait 15 seconds, then:
+```powershell
+$env:SCENARIO_NAME="s1-qos-2"; $env:MESSAGE_COUNT="1000"; python load-tests/upload-script/upload.py
+```
+
+→ When done: run reset script (step 5), then continue.
+
+---
+
+**S1 — QOS=5**
+```powershell
+$env:WORKER_CONSUMER_QOS="5"; $env:WORKER_CONSUMER_FLATMAP_CONCURRENCY="5"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d worker
+```
+```powershell
+$env:SCENARIO_NAME="s1-qos-5"; $env:MESSAGE_COUNT="1000"; python load-tests/upload-script/upload.py
+```
+
+---
+
+**S1 — QOS=10**
+```powershell
+$env:WORKER_CONSUMER_QOS="10"; $env:WORKER_CONSUMER_FLATMAP_CONCURRENCY="10"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d worker
+```
+```powershell
+$env:SCENARIO_NAME="s1-qos-10"; $env:MESSAGE_COUNT="1000"; python load-tests/upload-script/upload.py
+```
+
+---
+
+**S1 — QOS=25**
+```powershell
+$env:WORKER_CONSUMER_QOS="25"; $env:WORKER_CONSUMER_FLATMAP_CONCURRENCY="25"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d worker
+```
+```powershell
+$env:SCENARIO_NAME="s1-qos-25"; $env:MESSAGE_COUNT="1000"; python load-tests/upload-script/upload.py
+```
+
+---
+
+**S1 — QOS=50**
+```powershell
+$env:WORKER_CONSUMER_QOS="50"; $env:WORKER_CONSUMER_FLATMAP_CONCURRENCY="50"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d worker
+```
+```powershell
+$env:SCENARIO_NAME="s1-qos-50"; $env:MESSAGE_COUNT="1000"; python load-tests/upload-script/upload.py
+```
+
+→ After all 5 QOS runs: reset, then continue to S2.
+
+---
+
+**S2 — DLQ Validation (100% failure)**
+```powershell
+$env:STUB_FAILURE_RATE="1.0"; $env:STUB_DELAY_SECONDS="0"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d ai-service
+$env:WORKER_CONSUMER_QOS="10"; $env:WORKER_CONSUMER_FLATMAP_CONCURRENCY="10"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d worker
+```
+```powershell
+$env:SCENARIO_NAME="s2-dlq"; $env:MESSAGE_COUNT="1000"; python load-tests/upload-script/upload.py
+```
+
+→ Reset, restore stub, then S3.
+
+```powershell
+$env:STUB_FAILURE_RATE="0.0"; $env:STUB_DELAY_SECONDS="1.0"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d ai-service
+```
+
+---
+
+**S3 — Retry Mix (40% failure)**
+```powershell
+$env:STUB_FAILURE_RATE="0.4"; $env:STUB_DELAY_SECONDS="1.0"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d ai-service
+$env:WORKER_CONSUMER_QOS="10"; $env:WORKER_CONSUMER_FLATMAP_CONCURRENCY="10"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d worker
+```
+```powershell
+$env:SCENARIO_NAME="s3-retry-mix"; $env:MESSAGE_COUNT="1000"; python load-tests/upload-script/upload.py
+```
+
+→ Reset, restore stub, then S4.
+
+```powershell
+$env:STUB_FAILURE_RATE="0.0"; $env:STUB_DELAY_SECONDS="1.0"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d ai-service
+```
+
+---
+
+**S4 — 429 Backoff (open worker logs in a separate window first)**
+```powershell
+docker logs worker -f
+```
+```powershell
+$env:STUB_RATE_LIMIT_RATE="1.0"; $env:STUB_DELAY_SECONDS="0"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d ai-service
+$env:WORKER_CONSUMER_QOS="5"; $env:WORKER_CONSUMER_FLATMAP_CONCURRENCY="5"; docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml up -d worker
+```
+```powershell
+$env:SCENARIO_NAME="s4-429"; $env:MESSAGE_COUNT="20"; $env:DRAIN_TIMEOUT_MINUTES="15"; python load-tests/upload-script/upload.py
+```
+
+---
+
+### 7. Export CSVs — DO THIS BEFORE TEARING DOWN
+
+See Part 6 of this plan for the full export checklist.
+
+**Critical:** export the Queue Depth panel from the **dashboard panel inspector** (three dots → Inspect → Data → Download CSV), NOT from the Explore view. The panel exports all 4 queue columns. Explore only exports 1.
+
+Verify the Queue Depth CSV has 4 columns:
+```bash
+head -2 "load-tests/results/grafana-exports/Queue Depth*"
+```
+
+---
+
+### 8. Tear down
+
+```powershell
+docker-compose --env-file .env --env-file .env.loadtest -f docker-compose.yml -f docker-compose.dev.yml -f load-tests/docker-compose.loadtest.yml down
+```
+
+Then re-enable Railway:
+```
+APP_RECOVERY_ENABLED=true
+```
+
+---
+
+### ⚠️ Cautions
+
+- **Never use `docker-compose down` before exporting CSVs** — Prometheus data is lost
+- **Always use the loadtest Supabase project** — the `.env.loadtest` file must be passed with `--env-file`
+- **Watch for "Connection refused" in worker logs** — if the queue isn't draining within 30 seconds of the upload finishing, check `docker logs worker --tail 20` and restart the worker
+- **The StaleJobRecoveryService** is now isolated — loadtest DB is separate from production so it can't interfere. The `APP_RECOVERY_ENABLED=false` on Railway is still good practice
+- **If the upload script prints EMERGENCY BRAKE** — stop everything, check worker logs, do not proceed until resolved
+- **One timeout per 1000 uploads is normal** — your machine is under load. Up to 5 errors out of 1000 is acceptable
+
+---
+
 ## Overview
 
 This plan covers a full load test session for the document processing pipeline.

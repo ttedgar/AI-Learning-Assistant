@@ -50,7 +50,7 @@ export default function InfoPageLayout({ title, children }) {
 
       {/* Footer */}
       <footer className="max-w-4xl mx-auto px-6 py-8 border-t border-gray-100 dark:border-gray-800 text-center text-xs text-gray-400 dark:text-gray-600">
-        AI Learning Assistant — built with React, Spring Boot, and Gemini.
+        AI Learning Assistant — built with React, Spring Boot, and OpenRouter.
       </footer>
     </div>
   )

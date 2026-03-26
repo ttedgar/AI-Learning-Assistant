@@ -14,7 +14,7 @@ import HowToUsePage from './pages/HowToUsePage'
 import TechnicalPage from './pages/TechnicalPage'
 import DiaryPage from './pages/DiaryPage'
 import SystemMapPage from './pages/SystemMapPage'
-import LoadTestPage from './pages/LoadTestPage'
+import LoadTestFullReport20260326 from './pages/LoadTestFullReport20260326'
 import RawMetricsPage from './pages/RawMetricsPage'
 
 /**
@@ -135,7 +135,7 @@ export default function App() {
           <Route path="/technical" element={<TechnicalPage />} />
           <Route path="/architecture" element={<SystemMapPage />} />
           <Route path="/diary" element={<DiaryPage />} />
-          <Route path="/load-test" element={<LoadTestPage />} />
+          <Route path="/load-test" element={<LoadTestFullReport20260326 />} />
           <Route path="/raw-metrics" element={<RawMetricsPage />} />
           {/* Catch-all: redirect unknown paths to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />

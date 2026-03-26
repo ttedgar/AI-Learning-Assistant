@@ -21,7 +21,7 @@ See `plan.md` for the full plan, worktree breakdown, and execution rounds.
 | Frontend | React + Vite + Tailwind + Zustand + TanStack Query |
 | Backend | Spring Boot 3.x, Java 17, `com.edi.backend` |
 | Worker | Spring Boot 3.x, Java 17, `com.edi.worker` |
-| AI Service | Python 3.12, FastAPI, LangChain, Gemini |
+| AI Service | Python 3.12, FastAPI, LangChain, OpenRouter (free tier) |
 | Auth | Supabase (Google OAuth) |
 | Storage | Supabase Storage (PDFs) |
 | Database | Supabase PostgreSQL |
@@ -34,7 +34,7 @@ See `plan.md` for the full plan, worktree breakdown, and execution rounds.
 - **Single writer principle** — worker never writes to DB, publishes `document.processed` event, backend consumes and saves
 - **Two queues** — `document.processing` (backend→worker), `document.processed` (worker→backend)
 - **Dead letter queue** — `document.processing.dlq` catches messages after 3 failed retries
-- **DIP at architecture level** — worker depends on ai-service interface, not Gemini directly
+- **DIP at architecture level** — worker depends on ai-service interface, not the LLM provider directly (proven by Gemini → OpenRouter migration)
 - **Internal API key** — worker→ai-service requires `X-Internal-Api-Key` header (production: mTLS)
 - **correlationId tracing** — manually propagated through queue messages, injected into MDC (production: OpenTelemetry + Jaeger)
 - **Long documents** — chunk + map-reduce summarization via LangChain

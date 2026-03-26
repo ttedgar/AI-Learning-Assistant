@@ -10,7 +10,12 @@
 #     -f docker-compose.yml \
 #     -f docker-compose.dev.yml \
 #     -f load-tests/docker-compose.loadtest.yml \
+#     --env-file .env \
+#     --env-file .env.loadtest \
 #     up -d --build
+#
+# The .env.loadtest file overrides Supabase credentials to point at the
+# isolated load test project, keeping production DB completely separate.
 #
 # Change QOS between runs (restarts worker only):
 #   WORKER_CONSUMER_QOS=5 WORKER_CONSUMER_FLATMAP_CONCURRENCY=5 \

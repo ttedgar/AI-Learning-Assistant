@@ -116,7 +116,7 @@ export default function HowToUsePage() {
               <li className="flex gap-2">
                 <span className="text-indigo-500 font-bold">→</span>
                 If a document shows <span className="text-red-500 dark:text-red-400 font-medium">Failed</span>,
-                the most common cause is a PDF that couldn't be parsed or a Gemini API timeout on a very large
+                the most common cause is a PDF that couldn't be parsed or a LLM API timeout on a very large
                 document. Try splitting it into smaller sections.
               </li>
               <li className="flex gap-2">
