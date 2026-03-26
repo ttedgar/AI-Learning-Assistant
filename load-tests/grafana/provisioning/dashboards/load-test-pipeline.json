@@ -191,7 +191,7 @@
         {
           "refId": "C",
           "expr": "rabbitmq_detailed_queue_messages_ready{queue=\"document.processing.dlq\"}",
-          "legendFormat": "document.processing.dlq \u26a0\ufe0f"
+          "legendFormat": "document.processing.dlq"
         },
         {
           "refId": "D",

@@ -67,6 +67,25 @@ public class StaleJobRecoveryService {
      */
     static final Duration STUCK_PENDING_THRESHOLD = Duration.ofMinutes(15);
 
+    /**
+     * Runtime kill-switch for the recovery job.
+     *
+     * <p>Set {@code APP_RECOVERY_ENABLED=false} in Railway environment variables before
+     * running load tests against the shared Supabase database. The service restarts on
+     * env var change so no redeploy is needed. Re-enable after load test cleanup.
+     *
+     * <p>Why this matters: load test documents are PENDING in the shared DB for the
+     * duration of the test (potentially hours). Without this flag the recovery service
+     * picks them up after 15 min and publishes them to Railway's RabbitMQ — causing
+     * "Document not found" floods when the documents are subsequently cleaned up.
+     *
+     * <p>Production equivalent: a distributed maintenance-mode flag in Redis or a
+     * feature flag service (LaunchDarkly, Unleash) that disables scheduled jobs without
+     * requiring a restart.
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.recovery.enabled:true}")
+    private boolean recoveryEnabled;
+
     private final DocumentRepository        documentRepository;
     private final DocumentProcessingProducer producer;
     private final MeterRegistry             meterRegistry;
@@ -93,8 +112,12 @@ public class StaleJobRecoveryService {
     @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
     @Transactional
     public void recoverStaleJobs() {
-        Instant now = Instant.now();
+        if (!recoveryEnabled) {
+            log.info("Recovery scan skipped — disabled via app.recovery.enabled=false");
+            return;
+        }
 
+        Instant now = Instant.now();
         recoverStaleInProgress(now);
         recoverStuckPending(now);
     }

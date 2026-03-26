@@ -845,18 +845,75 @@ stop the test immediately and investigate `RabbitMqConfig.documentProcessingRetr
 
 ## Part 6: Results Capture
 
-After the final scenario completes, capture everything before tearing down.
+**Do this BEFORE tearing down the stack. Once `docker-compose down` runs, Prometheus
+data is gone. Grafana data survives (named volume) but the time series do not.**
 
-### Step 1 — Export Grafana snapshots
+---
 
-For each dashboard (RabbitMQ Overview, JVM Micrometer, custom load test panel):
+### Step 1 — Export every CSV from the Load Test dashboard
+
+This is the most critical step. Do it before anything else.
+
+Open the **Load Test — Pipeline Overview** dashboard (`http://localhost:3000/d/load-test-pipeline`).
+
+For **every panel**, do this in order:
+1. Click the three-dot menu (⋯) on the panel
+2. **Inspect → Data**
+3. Click **Download CSV**
+4. Save to `load-tests/results/grafana-exports/`
+
+**⚠️ CRITICAL — panels that export multiple series correctly:**
+
+The Queue Depth panel has 4 separate targets (one per queue). When you export it
+from the **panel inspector** (not from Explore), Grafana will include all 4 columns:
+`document.processing`, `document.processed`, `document.processing.dlq`, `document.status`.
+
+**DO NOT export from the Explore view** — Explore only exports the first series.
+Always export from the dashboard panel inspector.
+
+**Complete panel export checklist — check each off:**
+
+| Panel | Expected columns | Done? |
+|---|---|---|
+| Queue Depth — All Queues | document.processing, document.processed, document.processing.dlq, document.status | ☐ |
+| Total Messages Ready | Total ready | ☐ |
+| Message Publish Rate vs Deliver Rate | Publish rate (msg/s) | ☐ |
+| Messages Published / s | Published / s | ☐ |
+| Messages Routed to Queues / s | Routed / s | ☐ |
+| Unacknowledged Messages (In-Flight) | Unacked (document.processing) | ☐ |
+| Worker Unacked vs QOS Capacity | Unacked (in-flight) | ☐ |
+| Retries & DLQ Events | Retry rate | ☐ |
+| AI Call Latency — Average per Operation | Avg latency — flashcards | ☐ |
+| End-to-End Pipeline Duration — Average | Avg e2e duration (DONE) | ☐ |
+| Backend DB Connection Pool (HikariCP) | Active connections | ☐ |
+| Consumer Capacity — document.processing | Consumer capacity | ☐ |
+| Worker CPU Usage | Worker CPU | ☐ |
+| Worker JVM Heap | Heap used — G1 Eden Space | ☐ |
+| Backend JVM Heap | Heap used — G1 Eden Space | ☐ |
+| Worker Threads | Live threads | ☐ |
+| Worker CPU Usage | Worker CPU | ☐ |
+| Worker Unacked vs QOS Capacity | Unacked (in-flight) | ☐ |
+
+**After downloading, verify the Queue Depth CSV has 4 columns:**
+
+```bash
+head -2 "load-tests/results/grafana-exports/Queue Depth*"
+# Must show: Time, document.processing, document.processed, document.processing.dlq, document.status
+# If it only shows Time + one column — you exported from Explore, not the panel. Redo it.
+```
+
+---
+
+### Step 2 — Export Grafana snapshots
+
+For each dashboard (RabbitMQ Overview, JVM Micrometer, Load Test Pipeline):
 
 Grafana UI → Dashboard → Share (top bar) → Snapshot → Publish locally
 
 This creates a permanent snapshot URL accessible even after the stack is torn down.
 Copy all snapshot URLs into `load-tests/results/snapshots.md`.
 
-### Step 2 — Export raw Prometheus data (optional)
+### Step 3 — Export raw Prometheus data (optional)
 
 If you want the raw time series for later analysis:
 

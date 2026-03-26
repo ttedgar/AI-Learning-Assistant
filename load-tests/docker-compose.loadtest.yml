@@ -70,6 +70,7 @@ services:
     container_name: prometheus
     volumes:
       - ./load-tests/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus   # named volume — survives docker-compose down
     ports:
       - "127.0.0.1:9090:9090"
     restart: unless-stopped
@@ -94,3 +95,4 @@ services:
 
 volumes:
   grafana-data:
+  prometheus-data:

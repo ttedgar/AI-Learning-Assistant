@@ -14,6 +14,8 @@ import HowToUsePage from './pages/HowToUsePage'
 import TechnicalPage from './pages/TechnicalPage'
 import DiaryPage from './pages/DiaryPage'
 import SystemMapPage from './pages/SystemMapPage'
+import LoadTestPage from './pages/LoadTestPage'
+import RawMetricsPage from './pages/RawMetricsPage'
 
 /**
  * Single QueryClient instance for the whole app.
@@ -133,6 +135,8 @@ export default function App() {
           <Route path="/technical" element={<TechnicalPage />} />
           <Route path="/architecture" element={<SystemMapPage />} />
           <Route path="/diary" element={<DiaryPage />} />
+          <Route path="/load-test" element={<LoadTestPage />} />
+          <Route path="/raw-metrics" element={<RawMetricsPage />} />
           {/* Catch-all: redirect unknown paths to landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

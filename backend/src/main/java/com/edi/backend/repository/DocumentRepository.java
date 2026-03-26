@@ -138,12 +138,23 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
      *       take up to 30 minutes — recovery provides a shorter detection window).</li>
      *   <li>Backend publish failure on upload (dual-write gap — mitigated until outbox is added).</li>
      * </ul>
+     *
+     * <p>Load test exclusion: documents with titles matching {@code loadtest-%} are excluded.
+     * Load tests run against the shared DB and intentionally create many PENDING documents;
+     * republishing them to Railway's RabbitMQ causes "Document not found" floods when the
+     * test data is cleaned up. This filter is defence-in-depth alongside the
+     * {@code app.recovery.enabled} kill-switch in {@code StaleJobRecoveryService}.
+     *
+     * <p>Production note: if load tests ever use a dedicated DB, this filter can be removed.
+     * A cleaner long-term solution is a {@code source} or {@code environment} column on
+     * documents that distinguishes test data from production data at the schema level.
      */
     @Query("""
             SELECT d FROM Document d
              WHERE d.status = 'PENDING'
                AND d.processingStartedAt IS NULL
                AND d.createdAt < :cutoff
+               AND d.title NOT LIKE 'loadtest-%'
             """)
     List<Document> findStuckPendingDocuments(@Param("cutoff") Instant cutoff);
 }
