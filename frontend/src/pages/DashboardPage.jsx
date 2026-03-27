@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '../lib/axios'
 import AppLayout from '../components/AppLayout'
+import Footer from '../components/Footer'
 import StatusBadge from '../components/StatusBadge'
 
 const ACTIVE_STATUSES = new Set(['PENDING', 'IN_PROGRESS'])
@@ -268,25 +269,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <footer className="mt-auto pt-8 border-t border-gray-100 dark:border-gray-800 text-center text-xs text-gray-400 dark:text-gray-600 pb-6">
-        <nav className="flex items-center justify-center gap-5">
-          <Link to="/how-to-use" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
-            How to Use
-          </Link>
-          <span>·</span>
-          <Link to="/technical" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
-            Technical Information
-          </Link>
-          <span>·</span>
-          <Link to="/architecture" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
-            Architecture
-          </Link>
-          <span>·</span>
-          <Link to="/load-test" className="hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
-            Load Test Results
-          </Link>
-        </nav>
-      </footer>
+      <Footer />
     </AppLayout>
   )
 }

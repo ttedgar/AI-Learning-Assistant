@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import useDarkMode from '../hooks/useDarkMode'
 import useAuthStore from '../stores/authStore'
+import Footer from './Footer'
 
 /**
  * Shared shell for public info pages (How to Use, Technical Info, Diary).
@@ -51,10 +52,7 @@ export default function InfoPageLayout({ title, children }) {
         {children}
       </main>
 
-      {/* Footer */}
-      <footer className="max-w-4xl mx-auto px-6 py-8 border-t border-gray-100 dark:border-gray-800 text-center text-xs text-gray-400 dark:text-gray-600">
-        AI Learning Assistant — built with React, Spring Boot, and OpenRouter.
-      </footer>
+      <Footer />
     </div>
   )
 }
