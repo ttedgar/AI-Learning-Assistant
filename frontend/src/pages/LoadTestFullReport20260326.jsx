@@ -16,15 +16,20 @@ const RUNS_META = [
 
 // ── QOS Ladder drain curves (2026-03-25, same infra) ─────────────────────
 const DRAIN_DATA = {
-  qos2:  [[0,114],[15,547],[30,945],[45,930],[60,911],[75,887],[90,865],[105,849],[120,825],[135,801],[150,788],[165,776],[180,765],[195,756],[210,734],[225,710],[240,694],[255,671],[270,648],[285,624],[300,608],[315,584],[330,562],[345,539],[360,525],[375,505],[390,484],[405,462],[420,440],[435,416],[450,401],[465,378],[480,355],[495,333],[510,317],[525,293],[540,271],[555,249],[570,235],[585,212],[600,190],[615,166],[630,150],[645,126],[660,103],[675,87],[690,63],[705,40],[720,16],[735,0]],
-  qos5:  [[0,107],[15,491],[30,870],[45,817],[60,768],[75,717],[90,659],[105,605],[120,549],[135,496],[150,460],[165,401],[180,341],[195,286],[210,229],[225,172],[240,138],[255,85],[270,30],[280,0]],
-  qos10: [[0,92],[15,418],[30,710],[45,637],[60,534],[75,425],[90,316],[105,206],[120,95],[135,0]],
-  qos25: [[0,5],[15,90],[20,30],[25,0]],
+  // Start at origin (0,0); first rise occurs after t>0
+  qos2:  [[0,0],[15,547],[30,945],[45,930],[60,911],[75,887],[90,865],[105,849],[120,825],[135,801],[150,788],[165,776],[180,765],[195,756],[210,734],[225,710],[240,694],[255,671],[270,648],[285,624],[300,608],[315,584],[330,562],[345,539],[360,525],[375,505],[390,484],[405,462],[420,440],[435,416],[450,401],[465,378],[480,355],[495,333],[510,317],[525,293],[540,271],[555,249],[570,235],[585,212],[600,190],[615,166],[630,150],[645,126],[660,103],[675,87],[690,63],[705,40],[720,16],[735,0]],
+  qos5:  [[0,0],[15,491],[30,870],[45,817],[60,768],[75,717],[90,659],[105,605],[120,549],[135,496],[150,460],[165,401],[180,341],[195,286],[210,229],[225,172],[240,138],[255,85],[270,30],[280,0]],
+  qos10: [[0,0],[15,418],[30,710],[45,637],[60,534],[75,425],[90,316],[105,206],[120,95],[135,0]],
+  qos25: [[0,0],[15,90],[20,30],[25,0]],
   qos50: [[0,0],[15,8],[30,0]],
 }
 
+// ── S1 QOS=5 processing vs processed (crossover-style; processed stays 0) ──
+const QOS5_PROCESSING = DRAIN_DATA.qos5
+const QOS5_PROCESSED  = DRAIN_DATA.qos5.map(([t, _]) => [t, 0])
+
 // ── S1 QOS=10 processing vs processed (crossover chart) ──────────────────
-const QOS10_PROCESSING = [[0,0],[10,0],[20,0],[30,0],[40,98],[50,285],[60,457],[70,612],[80,715],[90,653],[100,593],[110,523],[120,452],[130,378],[140,306],[150,234],[160,160],[170,87],[180,12],[190,0],[200,0],[210,0],[220,0],[230,0],[240,0],[250,0],[260,0],[270,0],[280,0],[290,0],[300,0]]
+const QOS10_PROCESSING = DRAIN_DATA.qos10
 const QOS10_PROCESSED  = [[0,0],[10,0],[20,0],[30,0],[40,0],[50,0],[60,0],[70,0],[80,0],[90,0],[100,0],[110,0],[120,29],[130,69],[140,107],[150,147],[160,185],[170,223],[180,258],[190,262],[200,228],[210,193],[220,161],[230,127],[240,93],[250,59],[260,25],[270,0],[280,0],[290,0],[300,0]]
 
 // ── S2 DLQ queue drain (from +1h offset window: 14:49:40 - 14:56:50) ─────
@@ -547,21 +552,45 @@ export default function LoadTestFullReport20260326() {
             ]} />
           </div>
 
-          {/* QOS=10 Processing vs Processed crossover */}
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-10 mb-3">QOS=10: Processing vs Processed Handoff</h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm leading-relaxed">
-            At QOS=10 the worker drains <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">document.processing</code> fast
-            enough that the backend becomes the visible bottleneck. As the worker publishes results
-            to <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">document.processed</code>,
-            the backend cannot consume them instantly, causing a peak of 262 messages before draining.
-          </p>
-          <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm leading-relaxed">
-            <span className="font-semibold text-gray-900 dark:text-white">Production fix:</span> increase{' '}
-            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">@RabbitListener</code> concurrency
-            from 1 to 5-10 — eliminates the processed queue buildup by matching backend write throughput
-            to worker output rate. The existing <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">SELECT FOR UPDATE</code> idempotency
-            guard already handles concurrent consumers safely.
-          </p>
+          {/* Processing vs Processed Handoff (side-by-side comparison by QOS) */}
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-10 mb-3">Processing vs Processed Handoff</h3>
+
+          {/* QOS=5 */}
+          <p className="text-sm font-semibold text-gray-900 dark:text-white mb-2">QOS=5</p>
+          <div className="w-full overflow-x-auto">
+            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full" style={{ minWidth: 320 }}>
+              <ChartGrid
+                yTicks={[0, 150, 300, 450, 600, 750, 900]}
+                xTicks={[0, 60, 120, 180, 240, 300]}
+                scaleX={makeScaleX(300)} scaleY={makeScaleY(900)}
+                axisColor={axisColor} gridColor={gridColor}
+              />
+              <ChartPolyline data={QOS5_PROCESSING} scaleX={makeScaleX(300)} scaleY={makeScaleY(900)} color="#22c55e" />
+              <ChartPolyline data={QOS5_PROCESSED}  scaleX={makeScaleX(300)} scaleY={makeScaleY(900)} color="#3b82f6" />
+              <ChartLabels
+                yTicks={[0, 150, 300, 450, 600, 750, 900]}
+                xTicks={[0, 60, 120, 180, 240, 300]}
+                scaleX={makeScaleX(300)} scaleY={makeScaleY(900)}
+                yLabel="messages in queue" xLabel="seconds from run start"
+                formatY={(v) => String(v)} formatX={(t) => `${t}s`}
+                textColor={textColor}
+              />
+            </svg>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3 px-1">
+              {[
+                { color: '#22c55e', label: 'document.processing (worker input)' },
+                { color: '#3b82f6', label: 'document.processed (backend input, 0)' },
+              ].map(l => (
+                <div key={l.label} className="flex items-center gap-2">
+                  <div className="w-5 h-0.5 rounded-full" style={{ backgroundColor: l.color }} />
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{l.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* QOS=10 */}
+          <p className="text-sm font-semibold text-gray-900 dark:text-white mt-8 mb-2">QOS=10</p>
           <div className="w-full overflow-x-auto">
             <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full" style={{ minWidth: 320 }}>
               <ChartGrid
@@ -593,6 +622,24 @@ export default function LoadTestFullReport20260326() {
               ))}
             </div>
           </div>
+
+          {/* Explanation for both */}
+          <p className="text-gray-600 dark:text-gray-400 mt-4 mb-4 text-sm leading-relaxed">
+            At QOS=5, <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">document.processed</code> stays at 0 —
+            the backend keeps up with the worker’s output, so only the
+            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono"> document.processing</code> queue shows a drain curve.
+            At QOS=10, the worker drains <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">document.processing</code>
+            fast enough that the backend becomes the visible bottleneck, and
+            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono"> document.processed</code> briefly accumulates (peak ≈262)
+            before draining.
+          </p>
+          <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm leading-relaxed">
+            <span className="font-semibold text-gray-900 dark:text-white">Production fix:</span> increase
+            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono"> @RabbitListener</code> consumer concurrency from 1 to 5–10
+            to match backend write throughput to worker output rate. The existing
+            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono"> SELECT FOR UPDATE</code> idempotency guard already
+            handles concurrent consumers safely.
+          </p>
 
           {/* E2E Duration — stacked bar */}
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-10 mb-3">End-to-End Duration Breakdown</h3>
