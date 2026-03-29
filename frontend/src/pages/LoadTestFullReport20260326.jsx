@@ -646,11 +646,13 @@ export default function LoadTestFullReport20260326() {
           <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm leading-relaxed">
             Average time from document upload to result saved in the database, decomposed into three phases:
             worker queue wait (time in <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">document.processing</code>),
-            processing time (~13s constant), and backend queue wait (time
-            in <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">document.processed</code> waiting
-            for DB write). At low QOS the bottleneck is upstream (worker queue). At high QOS it shifts
-            downstream (backend DB writes). QOS=10 and 25 converge near ~65s but for entirely different reasons. QOS=50 is
-            actually worse (77s) due to Supabase connection contention at high concurrency.
+            processing time (~13s constant), and processed queue wait (time
+            in <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">document.processed</code> waiting for the single
+            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono"> @RabbitListener</code> to pick up and write). At low QOS the
+            bottleneck is upstream (worker queue). At high QOS it shifts downstream (backend consumer concurrency on
+            <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono"> document.processed</code>). QOS=10 and 25 converge near ~65s but
+            for entirely different reasons. QOS=50 is actually worse (77s) due to Supabase connection contention at high
+            concurrency.
           </p>
           {(() => {
             const e2eBars = [
@@ -725,7 +727,7 @@ export default function LoadTestFullReport20260326() {
                         {/* Backend wait label inside segment if tall enough */}
                         {bwH > 18 && (
                           <text x={x + barW / 2} y={bwY + bwH / 2 + 4} textAnchor="middle" fontSize="8" fill={dark ? '#e2e8f0' : '#374151'} fontWeight="600">
-                            {Math.round(b.backendWait / b.total * 100)}% DB wait
+                            {Math.round(b.backendWait / b.total * 100)}% backend wait
                           </text>
                         )}
                       </g>
@@ -739,7 +741,7 @@ export default function LoadTestFullReport20260326() {
                 <div className="flex flex-wrap gap-x-6 gap-y-2 mt-3 px-1">
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-3 rounded-sm" style={{ backgroundColor: '#6366f1', opacity: 0.3 }} />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Worker queue wait (upstream bottleneck)</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Worker consumer wait (upstream bottleneck, processing queue)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-3 rounded-sm" style={{ backgroundColor: '#6366f1', opacity: 0.85 }} />
@@ -747,7 +749,7 @@ export default function LoadTestFullReport20260326() {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-3 rounded-sm" style={{ backgroundColor: '#f97316', opacity: 0.4 }} />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Backend DB wait (downstream bottleneck)</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Backend consumer wait (downstream bottleneck, processed queue)</span>
                   </div>
                 </div>
               </div>
