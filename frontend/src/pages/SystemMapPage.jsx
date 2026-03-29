@@ -590,27 +590,20 @@ function PercentEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, t
       {data?.label && (
         <EdgeLabelRenderer>
           <div
-            ref={labelRef}
-            className="nodrag nopan pointer-events-auto"
-            onMouseEnter={() => {
-              const r = labelRef.current?.getBoundingClientRect()
-              if (r) setTipPos({ x: r.left + r.width / 2, y: r.top })
-            }}
-            onMouseLeave={() => setTipPos(null)}
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%,-50%) translate(${lx}px,${ly}px)`,
-              background: data.labelBg,
-              color: data.labelColor,
-              border: `0.75px solid ${data.labelBorder ?? 'transparent'}`,
-              fontSize: 10,
-              fontWeight: 500,
-              borderRadius: 4,
-              padding: '3px 6px',
-              cursor: 'default',
-            }}
+            className="nodrag nopan pointer-events-auto absolute"
+            style={{ transform: `translate(-50%,-50%) translate(${lx}px,${ly}px)` }}
           >
-            {data.label}
+            <span
+              ref={labelRef}
+              onMouseEnter={() => {
+                const r = labelRef.current?.getBoundingClientRect()
+                if (r) setTipPos({ x: r.left + r.width / 2, y: r.top })
+              }}
+              onMouseLeave={() => setTipPos(null)}
+              className="block text-[9px] text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 border border-gray-400/30 dark:border-gray-600/40 rounded px-1.5 py-0.5 cursor-default select-none"
+            >
+              {data.label}
+            </span>
           </div>
         </EdgeLabelRenderer>
       )}
