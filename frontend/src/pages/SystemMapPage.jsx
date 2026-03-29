@@ -226,7 +226,7 @@ const SERVICE_DETAIL_NODES = {
   //
   // Backend — col0=0, col1=450, col2=900 (194px gap between columns)
   backend: [
-    mkIn('be-filter',   'Security Filter Chain', 'CorrelationIdFilter → BearerTokenAuthFilter → SupabaseJwtFilter → AuthorizationFilter · MDC thread-local',  450,   0, '#22c55e', true),
+    mkIn('be-filter',   'CorrelationIdFilter + Security Filter Chain', 'CorrelationIdFilter → BearerTokenAuthFilter → SupabaseJwtFilter → AuthorizationFilter · MDC thread-local',  450,   0, '#22c55e', true),
     mkIn('be-ctrl',     'Controllers',           '/api/v1/ · AuthController · DocumentController · ResultsController · HealthController',                      450, 220, '#3b82f6', true),
     mkIn('be-svc',      'Services',              'DocumentService · AuthService · ResultsService · StorageService · lazy user lookup · upsert pattern',         450, 440, '#a855f7'),
     mkIn('be-repo',     'Repositories (JPA)',    'DocumentRepository · UserRepository · SummaryRepository · FlashcardRepository · QuizQuestionRepository',     450, 660, '#f59e0b'),
@@ -558,7 +558,7 @@ const L3_PARENT = {
 // Human-readable label for the breadcrumb
 const L3_LABEL = {
   'be-ctrl':     'Controllers',
-  'be-filter':   'Security Filter Chain',
+  'be-filter':   'CorrelationIdFilter + Security Filter Chain',
   'be-rate':     'Rate Limiter',
   'be-msg':      'Messaging',
   'be-recovery': 'Stale Job Recovery',
